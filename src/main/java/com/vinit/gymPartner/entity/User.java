@@ -45,6 +45,9 @@ public class User {
     @JoinColumn(name = "gym_id", nullable = false)
     private Gym gym;
 
+    @Column(nullable = false)
+    private boolean lookingForPartner = true;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
