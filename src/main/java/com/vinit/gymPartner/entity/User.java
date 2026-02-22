@@ -48,6 +48,9 @@ public class User {
     @Column(nullable = false)
     private boolean lookingForPartner = true;
 
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private FitnessProfile fitnessProfile;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

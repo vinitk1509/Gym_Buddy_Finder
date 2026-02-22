@@ -1,5 +1,6 @@
 package com.vinit.gymPartner.security;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -39,6 +40,15 @@ public class JwtService {
     {
         return extractAllClaims(token).get("userId", Long.class);
     }
+
+    private Claims extractAllClaims(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+    }
+
     public String extractEmail(String token)
     {
         return extractAllClaims(token).getSubject();
