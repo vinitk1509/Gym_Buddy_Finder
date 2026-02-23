@@ -13,6 +13,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+
+
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -26,11 +28,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         final String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")){
-            filterChain.doFilter(request,response);
+            filterChain.doFilter(request,response);   // No token? Continue (might be public endpoint)
             return;
         }
 
-        String token = authHeader.substring(7);
+        String token = authHeader.substring(7); //Extract token (remove "Bearer " prefix),
+        // "Bearer abc123" → "abc123"
 
         if (!jwtService.isTokenValid(token)){
             filterChain.doFilter(request,response);
@@ -40,15 +43,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String email = jwtService.extractEmail(token);
         UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
+
+        //Create authentication object
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 userDetails,
                 null,
                 userDetails.getAuthorities()
         );
 
+
+        //Set in security context (tells Spring "this request is authenticated")
         SecurityContextHolder.getContext()
                 .setAuthentication(authentication);
 
+        //Continue to the actual endpoint
         filterChain.doFilter(request,response);
     }
 }

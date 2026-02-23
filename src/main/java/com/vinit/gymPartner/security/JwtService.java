@@ -32,7 +32,7 @@ public class JwtService {
                 .claim("userId", userId)   //Claim = extra information stored in JWT.
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + expiration))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)   //Sign it (prove it's real)
                 .compact();  //Converts it to String and return it
     }
 

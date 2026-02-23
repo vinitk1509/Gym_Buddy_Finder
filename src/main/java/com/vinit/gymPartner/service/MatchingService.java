@@ -146,15 +146,15 @@ public class MatchingService {
     private Set<Long> getExcludedUserIds(Long userId) {
 
         List<Match> matches =
-                matchRepository.findByUser1IdOrUser2Id(userId, userId);
+                matchRepository.findByRequesterIdOrReceiverId(userId, userId);
 
         Set<Long> excluded = new HashSet<>();
 
         for (Match match : matches) {
-            if (match.getUser1().getId().equals(userId))
-                excluded.add(match.getUser2().getId());
+            if (match.getRequester().getId().equals(userId))
+                excluded.add(match.getReceiver().getId());
             else
-                excluded.add(match.getUser1().getId());
+                excluded.add(match.getRequester().getId());
         }
 
         return excluded;
