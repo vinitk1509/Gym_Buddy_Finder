@@ -24,5 +24,14 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
     );
 
     List<Match> findByRequesterIdOrReceiverId(Long requesterId, Long receiverId);
+    List<Match> findByRequesterIdAndStatus(Long requesterId, MatchStatus status);
+    List<Match> findByReceiverIdAndStatus(Long receiverId, MatchStatus status);
+
+    List<Match> findByStatusAndRequesterIdOrStatusAndReceiverId(
+            MatchStatus status1, Long requesterId,
+            MatchStatus status2, Long receiverId
+    );
+
+
 
 }
