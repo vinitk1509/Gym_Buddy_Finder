@@ -2,6 +2,7 @@ package com.vinit.gymPartner.entity;
 
 import com.vinit.gymPartner.entity.enums.ExperienceLevel;
 import com.vinit.gymPartner.entity.enums.FitnessGoal;
+import com.vinit.gymPartner.entity.enums.Gender;
 import com.vinit.gymPartner.entity.enums.WorkoutType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -22,6 +23,9 @@ public class FitnessProfile {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private FitnessGoal goal;
+
+    @Enumerated(EnumType.STRING)
+    private Gender preferredPartnerGender;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

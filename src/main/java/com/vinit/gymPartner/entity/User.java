@@ -1,5 +1,6 @@
 package com.vinit.gymPartner.entity;
 
+import com.vinit.gymPartner.entity.enums.Gender;
 import com.vinit.gymPartner.entity.enums.UserRole;
 import com.vinit.gymPartner.entity.enums.UserStatus;
 import jakarta.persistence.*;
@@ -31,6 +32,10 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     private UserRole role;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Gender gender;
 
     @Enumerated(EnumType.STRING)
     private UserStatus status;
