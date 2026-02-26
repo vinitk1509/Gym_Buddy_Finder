@@ -1,52 +1,46 @@
 package com.vinit.gymPartner.controller;
 
+
+import com.vinit.gymPartner.dto.ExploreFilterDTO;
 import com.vinit.gymPartner.dto.MatchResultDTO;
-import com.vinit.gymPartner.entity.User;
-import com.vinit.gymPartner.repository.UserRepository;
+import com.vinit.gymPartner.security.CustomUserDetails;
 import com.vinit.gymPartner.service.MatchingService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.*;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
-@RequestMapping("/api/matches")
+@RequestMapping("/api/suggestions")
 @RequiredArgsConstructor
 public class MatchingController {
 
-    private final MatchingService matchingService;
-    private final UserRepository userRepository;
+    public final MatchingService matchingService;
 
     @GetMapping
-    public ResponseEntity<Page<MatchResultDTO>> getMatches(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-    ) {
-
-        if (page < 0 || size <= 0 || size > 50) {
-            throw new IllegalArgumentException("Invalid pagination parameters");
-        }
-
-        // 🔐 Extract logged-in user from JWT
-        Authentication authentication =
-                SecurityContextHolder.getContext().getAuthentication();
-
-        String email = authentication.getName();
-
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, "compatibilityScore")
+    public ResponseEntity<List<MatchResultDTO>> getSuggestions(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+            ){
+        return ResponseEntity.ok(
+                matchingService.findCompatibleUsers(userDetails.getUserId())
         );
-
-        Page<MatchResultDTO> matches =
-                matchingService.findCompatibleUsers(user.getId(), pageable);
-
-        return ResponseEntity.ok(matches);
     }
+
+    @GetMapping("/explore")
+    public ResponseEntity<List<MatchResultDTO>> explore(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @ModelAttribute ExploreFilterDTO filter
+            ){
+        return ResponseEntity.ok(
+                matchingService.findExploreUsers(
+                        userDetails.getUserId(),
+                        filter)
+        );
+    }
+
 }

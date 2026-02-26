@@ -35,7 +35,10 @@ public class FitnessProfile {
     @Column(nullable = false)
     private WorkoutType workoutType;
 
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
+
+    private Integer preferredMinAge;
+    private Integer preferredMaxAge;
 }

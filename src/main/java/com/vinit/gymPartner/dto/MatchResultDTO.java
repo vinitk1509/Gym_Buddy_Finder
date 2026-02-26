@@ -10,6 +10,7 @@ public class MatchResultDTO {
 
     private Long userId;
     private String fullName;
+    private int age;
     private String experienceLevel;
     private String goal;
     private String workoutType;

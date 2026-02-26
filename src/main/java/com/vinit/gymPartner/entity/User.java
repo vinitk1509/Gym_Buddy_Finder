@@ -6,7 +6,9 @@ import com.vinit.gymPartner.entity.enums.UserStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
 
 @Entity
 @Table(name = "users")
@@ -37,6 +39,9 @@ public class User {
     @Column(nullable = false)
     private Gender gender;
 
+    @Column(name = "date_of_birth", nullable = false)
+    private LocalDate dateOfBirth;
+
     @Enumerated(EnumType.STRING)
     private UserStatus status;
 
@@ -59,5 +64,10 @@ public class User {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+
+
+    public int getAge() {
+        return Period.between(this.dateOfBirth, LocalDate.now()).getYears();
+    }
 
 }

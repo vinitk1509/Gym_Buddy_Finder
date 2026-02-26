@@ -4,6 +4,7 @@ import com.vinit.gymPartner.dto.MatchResponseDTO;
 import com.vinit.gymPartner.entity.Match;
 import com.vinit.gymPartner.entity.User;
 import com.vinit.gymPartner.entity.enums.MatchStatus;
+import com.vinit.gymPartner.repository.BlockRepository;
 import com.vinit.gymPartner.repository.MatchRepository;
 import com.vinit.gymPartner.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class MatchService {
 
     private final MatchRepository matchRepository;
     private final UserRepository userRepository;
+    private final BlockRepository blockRepository;
 
     public MatchResponseDTO sendMatchRequest(Long requesterId, Long receiverId)
     {
@@ -31,6 +33,10 @@ public class MatchService {
                 .orElseThrow(()->new RuntimeException("Requester not found"));
         User receiver = userRepository.findById(receiverId)
                 .orElseThrow(()->new RuntimeException("receiver not found"));
+
+        if (blockRepository.existsBlockBetweenUsers(requester, receiver)) {
+            throw new RuntimeException("You cannot interact with this user");
+        }
 
         Match existingMatch = matchRepository
                 .findByRequesterIdAndReceiverIdOrRequesterIdAndReceiverId(
@@ -81,6 +87,7 @@ public class MatchService {
 
         User loggedInUser = userRepository.findByEmail(userEmail)
                 .orElseThrow(()->new RuntimeException("User not found"));
+
 
         // ---------only receivers can accept------------
         if (!match.getReceiver().getId().equals(loggedInUser.getId())){

@@ -6,6 +6,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.time.LocalDate;
+
 @Data
 public class RegisterUserRequestDTO {
 
@@ -19,6 +21,12 @@ public class RegisterUserRequestDTO {
     @NotBlank
     @Size(min = 6)
     private String password;
+
+    @NotNull
+    private String gender;
+
+    @NotNull
+    private LocalDate dateOfBirth;
 
     @NotNull
     private String goal;

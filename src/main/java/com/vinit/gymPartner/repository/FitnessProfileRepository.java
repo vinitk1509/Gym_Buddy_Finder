@@ -10,6 +10,7 @@ import java.util.Optional;
 @Repository
 public interface FitnessProfileRepository extends JpaRepository<FitnessProfile, Long> {
 
-    Optional<FitnessProfile> findByUserId(Long userId);
-    List<FitnessProfile> findByUserIsIn(List<Long> userIds);
+    Optional<FitnessProfile> findByUser_Id(Long userId);
+    List<FitnessProfile> findByUser_IdIn(List<Long> userIds);
+    boolean existsByUser_Id(Long userId);
 }

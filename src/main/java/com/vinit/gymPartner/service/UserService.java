@@ -7,11 +7,7 @@ import com.vinit.gymPartner.dto.UserResponseDTO;
 import com.vinit.gymPartner.entity.FitnessProfile;
 import com.vinit.gymPartner.entity.Gym;
 import com.vinit.gymPartner.entity.User;
-import com.vinit.gymPartner.entity.enums.ExperienceLevel;
-import com.vinit.gymPartner.entity.enums.FitnessGoal;
-import com.vinit.gymPartner.entity.enums.UserRole;
-import com.vinit.gymPartner.entity.enums.UserStatus;
-import com.vinit.gymPartner.entity.enums.WorkoutType;
+import com.vinit.gymPartner.entity.enums.*;
 import com.vinit.gymPartner.repository.FitnessProfileRepository;
 import com.vinit.gymPartner.repository.GymRepository;
 import com.vinit.gymPartner.repository.UserRepository;
@@ -52,6 +48,8 @@ public class UserService {
         user.setName(requestDTO.getFullName());
         user.setEmail(requestDTO.getEmail());
         user.setPassword(passwordEncoder.encode(requestDTO.getPassword()));
+        user.setDateOfBirth(requestDTO.getDateOfBirth());
+        user.setGender(Gender.valueOf(requestDTO.getGender()));
         user.setGym(gym);
         user.setStatus(UserStatus.ACTIVE);
         user.setRole(UserRole.USER);
@@ -134,4 +132,5 @@ public class UserService {
         userRepository.save(user);
         return user;
     }
+
 }

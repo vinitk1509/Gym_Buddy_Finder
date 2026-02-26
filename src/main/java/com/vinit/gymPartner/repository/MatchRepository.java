@@ -1,8 +1,13 @@
 package com.vinit.gymPartner.repository;
 
 import com.vinit.gymPartner.entity.Match;
+import com.vinit.gymPartner.entity.User;
 import com.vinit.gymPartner.entity.enums.MatchStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +37,51 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
             MatchStatus status2, Long receiverId
     );
 
+    void deleteByRequesterAndReceiver(User requester, User receiver);
+
+    @Modifying
+    @Transactional
+    @Query("""
+    DELETE FROM Match m
+    WHERE (m.requester = :user1 AND m.receiver = :user2)
+       OR (m.requester = :user2 AND m.receiver = :user1)
+""")
+    void deleteMatchBetweenUsers(@Param("user1") User user1,
+                                 @Param("user2") User user2);
+
+    boolean existsByRequesterAndReceiver(User requester, User receiver);
+
+    boolean existsByRequesterAndReceiverAndStatus(
+            User requester,
+            User receiver,
+            MatchStatus status
+    );
+
+    boolean existsByRequesterOrReceiverAndStatus(
+            User requester,
+            User receiver,
+            MatchStatus status
+    );
+
+    List<Match> findAllByRequesterOrReceiverAndStatus(
+            User requester,
+            User receiver,
+            MatchStatus status
+    );
+
+    List<Match> findByRequesterAndStatus(
+            User requester,
+            MatchStatus status
+    );
+
+    List<Match> findByReceiverAndStatus(
+            User receiver,
+            MatchStatus status
+    );
+    List<Match> findByRequesterOrReceiver(
+            User requester,
+            User receiver
+    );
 
 
 }
