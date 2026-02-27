@@ -48,6 +48,8 @@ public class Match {
 
     private LocalDateTime updatedAt;
 
+    private LocalDateTime expiresAt;
+
     // Only used if status = TERMINATED
     private LocalDateTime terminatedAt;
 

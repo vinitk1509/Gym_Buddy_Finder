@@ -5,5 +5,6 @@ public enum MatchStatus {
     ACCEPTED,
     REJECTED,
     CANCELLED,
-    TERMINATED
+    TERMINATED,
+    EXPIRED
 }

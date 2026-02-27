@@ -1,6 +1,7 @@
 package com.vinit.gymPartner.security;
 
 import com.vinit.gymPartner.entity.User;
+import com.vinit.gymPartner.entity.enums.UserStatus;
 import com.vinit.gymPartner.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -21,9 +22,9 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email)
             throws UsernameNotFoundException {
 
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmailAndStatus(email, UserStatus.ACTIVE)
                 .orElseThrow(()->
-                        new UsernameNotFoundException("User Not Found"));
+                        new UsernameNotFoundException("User Not Found oe inactive"));
         return new CustomUserDetails(user);
     }
 }

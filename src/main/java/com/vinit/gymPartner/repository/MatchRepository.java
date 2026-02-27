@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -81,6 +82,26 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
     List<Match> findByRequesterOrReceiver(
             User requester,
             User receiver
+    );
+
+    @Modifying
+    @Query("""
+    UPDATE Match m
+    SET m.status = 'EXPIRED'
+    WHERE m.status = 'PENDING'
+    AND m.expiresAt <= :now
+""")
+    int expireOldMatches(@Param("now") LocalDateTime now);
+
+    @Query("""
+    SELECT COUNT(m)
+    FROM Match m
+    WHERE m.requester.id = :userId
+    AND m.createdAt >= :startOfDay
+""")
+    long countTodayRequests(
+            @Param("userId") Long userId,
+            @Param("startOfDay") LocalDateTime startOfDay
     );
 
 
