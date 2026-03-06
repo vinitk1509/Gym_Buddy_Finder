@@ -6,19 +6,19 @@ import com.vinit.gymPartner.dto.UpdateProfileRequest;
 import com.vinit.gymPartner.dto.UserResponseDTO;
 import com.vinit.gymPartner.entity.FitnessProfile;
 import com.vinit.gymPartner.entity.Gym;
-import com.vinit.gymPartner.entity.Match;
 import com.vinit.gymPartner.entity.User;
-import com.vinit.gymPartner.entity.enums.*;
+import com.vinit.gymPartner.entity.enums.ExperienceLevel;
+import com.vinit.gymPartner.entity.enums.FitnessGoal;
+import com.vinit.gymPartner.entity.enums.UserRole;
+import com.vinit.gymPartner.entity.enums.UserStatus;
+import com.vinit.gymPartner.entity.enums.WorkoutType;
 import com.vinit.gymPartner.repository.FitnessProfileRepository;
 import com.vinit.gymPartner.repository.GymRepository;
-import com.vinit.gymPartner.repository.MatchRepository;
 import com.vinit.gymPartner.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -29,13 +29,11 @@ public class UserService {
     private final GymRepository gymRepository;
     private final FitnessProfileRepository fitnessProfileRepository;
     private final PasswordEncoder passwordEncoder;
-    private final MatchRepository matchRepository;
 
     public RegisterUserResponseDTO registerUser(RegisterUserRequestDTO requestDTO){
         if (userRepository.existsByEmail(requestDTO.getEmail())){
             throw new RuntimeException("Email Already exist");
         }
-
 
         Gym gym = gymRepository
                 .findByNameAndAddress(
@@ -54,8 +52,6 @@ public class UserService {
         user.setName(requestDTO.getFullName());
         user.setEmail(requestDTO.getEmail());
         user.setPassword(passwordEncoder.encode(requestDTO.getPassword()));
-        user.setDateOfBirth(requestDTO.getDateOfBirth());
-        user.setGender(Gender.valueOf(requestDTO.getGender()));
         user.setGym(gym);
         user.setStatus(UserStatus.ACTIVE);
         user.setRole(UserRole.USER);
@@ -82,28 +78,6 @@ public class UserService {
                 .email(user.getEmail())
                 .message("User Registered Successfully")
                 .build();
-    }
-
-    public void softDeleteUser(Long userId) {
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
-
-        if (user.getStatus() == UserStatus.DELETED)
-            throw new RuntimeException("User already deleted");
-
-        user.setStatus(UserStatus.DELETED);
-        user.setLookingForPartner(false);
-
-        List<Match> activeMatches =
-                matchRepository.findAllByRequesterOrReceiverAndStatus(
-                        user, user, MatchStatus.ACCEPTED
-                );
-
-        for (Match match : activeMatches) {
-            match.setStatus(MatchStatus.TERMINATED);
-        }
     }
 
     @Transactional
@@ -159,31 +133,5 @@ public class UserService {
 
         userRepository.save(user);
         return user;
-    }
-
-    public void updateReliability(User user, int change) {
-
-        int updatedScore = user.getReliabilityScore() + change;
-
-        if (updatedScore > 100)
-            updatedScore = 100;
-
-        if (updatedScore < 0)
-            updatedScore = 0;
-
-        user.setReliabilityScore(updatedScore);
-    }
-
-    public User getCurrentUserEntity(String email) {
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-    }
-
-    public UserResponseDTO getUserById(Long id) {
-
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        return convertToResponseDTO(user);
     }
 }

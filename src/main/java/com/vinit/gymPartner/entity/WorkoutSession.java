@@ -42,5 +42,14 @@ public class WorkoutSession {
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
 
+    private Boolean requesterConfirmed;
+
+    private Boolean receiverConfirmed;
+
+    private Boolean requesterNoShow;
+
+    private Boolean receiverNoShow;
+
     private LocalDateTime createdAt;
+
 }

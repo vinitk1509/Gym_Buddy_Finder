@@ -5,14 +5,12 @@ import com.vinit.gymPartner.dto.RegisterUserResponseDTO;
 import com.vinit.gymPartner.dto.UpdateProfileRequest;
 import com.vinit.gymPartner.dto.UserResponseDTO;
 import com.vinit.gymPartner.entity.User;
-import com.vinit.gymPartner.security.CustomUserDetails;
-import com.vinit.gymPartner.service.UserProfileViewService;
 import com.vinit.gymPartner.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,7 +20,6 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
-    private final UserProfileViewService userProfileViewService;
 
     @PostMapping("/register")
     public ResponseEntity<RegisterUserResponseDTO> register(
@@ -52,32 +49,5 @@ public class UserController {
 
         User updatedUser = userService.updateCurrentUser(email, request);
         return ResponseEntity.ok(userService.convertToResponseDTO(updatedUser));
-    }
-
-    @DeleteMapping("/delete/me")
-    public ResponseEntity<String> deleteMyAccount(
-            @AuthenticationPrincipal CustomUserDetails userDetails
-    ) {
-        userService.softDeleteUser(userDetails.getUserId());
-        return ResponseEntity.ok("Account deleted successfully");
-    }
-
-
-    @GetMapping("/{id}")
-    public UserResponseDTO getUserProfile(
-            @PathVariable Long id,
-            Authentication authentication
-    ) {
-
-        String email = authentication.getName();
-
-        User currentUser = userService.getCurrentUserEntity(email);
-
-        userProfileViewService.recordProfileView(
-                currentUser.getId(),
-                id
-        );
-
-        return userService.getUserById(id);
     }
 }
