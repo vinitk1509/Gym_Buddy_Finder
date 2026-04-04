@@ -1,6 +1,6 @@
 package com.vinit.gymPartner.controller;
 
-import com.vinit.gymPartner.entity.Match;
+import com.vinit.gymPartner.dto.MatchResponseDTO;
 import com.vinit.gymPartner.entity.User;
 import com.vinit.gymPartner.repository.UserRepository;
 import com.vinit.gymPartner.service.MatchService;
@@ -18,7 +18,7 @@ public class MatchController {
     private final UserRepository userRepository;
 
     @PostMapping("/request")
-    public ResponseEntity<Match> sendRequest(
+    public ResponseEntity<MatchResponseDTO> sendRequest(
             @RequestParam Long receiverId,
             Authentication authentication
     ) {
@@ -28,19 +28,19 @@ public class MatchController {
         User requester = userRepository.findByEmail(email)
                 .orElseThrow(()->new RuntimeException("User not found"));
 
-        Match match = matchService.sendMatchRequest(requester.getId(), receiverId);
+        MatchResponseDTO match = matchService.sendMatchRequest(requester.getId(), receiverId);
         return ResponseEntity.ok(match);
     }
 
     @PostMapping("/{matchId}/accept")
-    public ResponseEntity<Match> acceptMatch(
+    public ResponseEntity<MatchResponseDTO> acceptMatch(
             @PathVariable Long matchId,
             Authentication authentication
     ) {
 
         String email = authentication.getName();
 
-        Match updatedMatch = matchService.acceptmatch(matchId, email);
+        MatchResponseDTO updatedMatch = matchService.acceptmatch(matchId, email);
 
         return ResponseEntity.ok(updatedMatch);
     }

@@ -28,6 +28,8 @@ public class Match {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "gym_id")
     private Gym gym;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

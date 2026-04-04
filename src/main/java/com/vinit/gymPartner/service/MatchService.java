@@ -9,6 +9,9 @@ import com.vinit.gymPartner.entity.enums.UserStatus;
 import com.vinit.gymPartner.repository.BlockRepository;
 import com.vinit.gymPartner.repository.MatchRepository;
 import com.vinit.gymPartner.repository.UserRepository;
+import com.vinit.gymPartner.repository.AvailabilitySlotRepository;
+import com.vinit.gymPartner.entity.AvailabilitySlot;
+import com.vinit.gymPartner.entity.FitnessProfile;
 import lombok.RequiredArgsConstructor;
 import org.apache.catalina.LifecycleState;
 import org.springframework.security.core.Authentication;
@@ -25,6 +28,8 @@ public class MatchService {
     private final MatchRepository matchRepository;
     private final UserRepository userRepository;
     private final BlockRepository blockRepository;
+    private final AvailabilitySlotRepository availabilitySlotRepository;
+    private final MatchingService matchingService;
     private UserService userService;
     private Match match;
     private final UserProfileViewService userProfileViewService;
@@ -63,6 +68,23 @@ public class MatchService {
         }
         if (receiver.getStatus() != UserStatus.ACTIVE)
             throw new RuntimeException("User account inactive");
+
+        // --- NEW REAL MATCHING RESTRICTIONS ---
+        if (!requester.getGym().getId().equals(receiver.getGym().getId())) {
+            throw new RuntimeException("Users must belong to the exact same Gym to match.");
+        }
+
+        FitnessProfile requesterProfile = requester.getFitnessProfile();
+        FitnessProfile receiverProfile = receiver.getFitnessProfile();
+        
+        if (requesterProfile == null || receiverProfile == null) {
+            throw new RuntimeException("Both users must have completed their fitness profiles.");
+        }
+
+        if (requesterProfile.getGoal() != receiverProfile.getGoal()) {
+            throw new RuntimeException("Matching requires having the exact same fitness goal.");
+        }
+        // ----------------------------------------
 
         Match existingMatch = matchRepository
                 .findByRequesterIdAndReceiverIdOrRequesterIdAndReceiverId(
@@ -127,8 +149,8 @@ public class MatchService {
         if (!match.getReceiver().getId().equals(loggedInUser.getId())){
             throw new IllegalStateException("Only receivers can accept this match");
         }
-        userService.updateReliability(match.getRequester(), +3);
-        userService.updateReliability(match.getReceiver(), +3);
+        userService.updateReliability(match.getRequester(), +2);
+        userService.updateReliability(match.getReceiver(), +2);
 
         match.setStatus(MatchStatus.ACCEPTED);
         return mapToDTO(matchRepository.save(match));
@@ -155,7 +177,7 @@ public class MatchService {
         match.setStatus(MatchStatus.REJECTED);
         match.setUpdatedAt(LocalDateTime.now());
 
-        userService.updateReliability(match.getRequester(), -2);
+        userService.updateReliability(match.getRequester(), -1);
 
         return mapToDTO(matchRepository.save(match));
     }
@@ -179,7 +201,7 @@ public class MatchService {
         match.setStatus(MatchStatus.CANCELLED);
         match.setUpdatedAt(LocalDateTime.now());
 
-        userService.updateReliability(match.getRequester(), -3);
+        userService.updateReliability(match.getRequester(), -2);
 
         return mapToDTO(matchRepository.save(match));
     }
@@ -211,7 +233,7 @@ public class MatchService {
                 match.setTerminatedBy(currentUser);
                 match.setUpdatedAt(LocalDateTime.now());
 
-        userService.updateReliability(currentUser, -10);
+        userService.updateReliability(currentUser, -5);
 
                 return mapToDTO(matchRepository.save(match));
     }
@@ -282,8 +304,16 @@ public class MatchService {
 
 
     private double calculateCompatibility(User requester, User receiver) {
-        // TEMPORARY: we will replace this later with real algorithm
-        return 75.0;
+        
+        FitnessProfile p1 = requester.getFitnessProfile();
+        FitnessProfile p2 = receiver.getFitnessProfile();
+        
+        List<AvailabilitySlot> slots1 = availabilitySlotRepository.findByUserId(requester.getId());
+        List<AvailabilitySlot> slots2 = availabilitySlotRepository.findByUserId(receiver.getId());
+        
+        int overlapMinutes = matchingService.calculateWeeklyOverlap(slots1, slots2);
+        
+        return matchingService.calculateCompatibility(requester, receiver, p1, p2, overlapMinutes);
     }
 
     private MatchResponseDTO mapToDTO(Match match) {

@@ -10,17 +10,22 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 public class BlockService {
 
     private final BlockRepository blockRepository;
     private final UserRepository userRepository;
     private final MatchRepository matchRepository;
 
+    public BlockService(BlockRepository blockRepository, UserRepository userRepository, MatchRepository matchRepository) {
+        this.blockRepository = blockRepository;
+        this.userRepository = userRepository;
+        this.matchRepository = matchRepository;
+    }
+
     @Transactional
     public void blockUser(Long blockerId, Long blockedId) {
         if (blockerId.equals(blockedId)) {
-            throw new RuntimeException("YOu cannot block yourself");
+            throw new RuntimeException("You cannot block yourself");
         }
 
         User blocker = userRepository.findById(blockerId)

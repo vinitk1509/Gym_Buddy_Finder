@@ -28,4 +28,8 @@ public class Block {
 
     private LocalDateTime createdAt;
 
+    public void setBlocker(User blocker) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
 }

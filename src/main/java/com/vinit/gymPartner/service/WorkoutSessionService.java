@@ -127,6 +127,9 @@ public class WorkoutSessionService {
                 && Boolean.TRUE.equals(session.getReceiverConfirmed())){
 
             session.setState(SessionState.COMPLETED);
+
+            UserService.updateReliability(match.getRequester(), +5);
+            UserService.updateReliability(match.getReceiver(), +5);
         }
     }
 
@@ -150,6 +153,17 @@ public class WorkoutSessionService {
         }
 
         session.setState(SessionState.NO_SHOW);
+        if(match.getRequester().getId().equals(reporterId)){
+            session.setReceiverNoShow(true);
+
+            UserService.updateReliability(match.getReceiver(), -20);
+        }
+
+        else if(match.getReceiver().getId().equals(reporterId)){
+            session.setRequesterNoShow(true);
+
+            UserService.updateReliability(match.getRequester(), -20);
+        }
     }
 
     public void cancelSession(Long sessionId, Long userId){
@@ -164,5 +178,13 @@ public class WorkoutSessionService {
             throw new RuntimeException("Not allowed");
 
         session.setState(SessionState.CANCELLED);
+        session.setState(SessionState.CANCELLED);
+
+        UserService.updateReliability(
+                userId.equals(match.getRequester().getId())
+                        ? match.getRequester()
+                        : match.getReceiver(),
+                -3
+        );
     }
 }

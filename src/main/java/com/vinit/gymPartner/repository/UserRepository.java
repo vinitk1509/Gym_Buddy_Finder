@@ -45,4 +45,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
             )
             """)
     List<User> findSuggestedUsers(Long currentUserId, LocalDateTime sevenDaysAgo);
+    List<User> findByStatus(UserStatus status);
+
 }

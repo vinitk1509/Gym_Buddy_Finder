@@ -9,6 +9,7 @@ import com.vinit.gymPartner.entity.Gym;
 import com.vinit.gymPartner.entity.User;
 import com.vinit.gymPartner.entity.enums.ExperienceLevel;
 import com.vinit.gymPartner.entity.enums.FitnessGoal;
+import com.vinit.gymPartner.entity.enums.Gender;
 import com.vinit.gymPartner.entity.enums.UserRole;
 import com.vinit.gymPartner.entity.enums.UserStatus;
 import com.vinit.gymPartner.entity.enums.WorkoutType;
@@ -58,6 +59,13 @@ public class UserService {
         user.setLookingForPartner(true);
         user.setAllowMultiplePartners(false);
         user.setReliabilityScore(100);
+
+        // Set gender from registration request
+        user.setGender(Gender.valueOf(requestDTO.getGender()));
+
+        // Set date of birth and auto-calculate age
+        user.setDateOfBirth(requestDTO.getDateOfBirth());
+        user.setAge(java.time.Period.between(requestDTO.getDateOfBirth(), java.time.LocalDate.now()).getYears());
 
         userRepository.save(user);
 
@@ -133,5 +141,15 @@ public class UserService {
 
         userRepository.save(user);
         return user;
+    }
+    @Transactional
+    public static void updateReliability(User user, int change) {
+
+        int newScore = user.getReliabilityScore() + change;
+
+        if (newScore > 100) newScore = 100;
+        if (newScore < 0) newScore = 0;
+
+        user.setReliabilityScore(newScore);
     }
 }

@@ -4,16 +4,15 @@ import com.vinit.gymPartner.entity.enums.ReportReason;
 import com.vinit.gymPartner.entity.enums.ReportStatus;
 import jakarta.persistence.*;
 import lombok.*;
-import org.springframework.data.annotation.Id;
 
 import java.time.LocalDateTime;
 
-@Entity
 @Getter
 @Setter
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
+@Entity
 public class UserReport {
 
     @Id

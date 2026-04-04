@@ -316,7 +316,7 @@ public class MatchingService {
         );
     }
 
-    private double calculateCompatibility(
+    public double calculateCompatibility(
             User u1,
             User u2,
             FitnessProfile p1,
@@ -374,7 +374,7 @@ public class MatchingService {
         return 1.0;
     }
 
-    private int calculateWeeklyOverlap(
+    public int calculateWeeklyOverlap(
             List<AvailabilitySlot> s1,
             List<AvailabilitySlot> s2) {
 

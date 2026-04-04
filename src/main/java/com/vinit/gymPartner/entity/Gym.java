@@ -28,6 +28,12 @@ public class Gym {
     private String city;
     private String address;
 
+    // Nullable: coordinates are set later by frontend map picker
+    private Double latitude;
+
+    // Nullable: coordinates are set later by frontend map picker
+    private Double longitude;
+
     @Column(nullable = false)
     private String timezone;
 
