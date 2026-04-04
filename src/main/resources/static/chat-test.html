@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GymPartner Chat Tester</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .chat-container { border: 1px solid #ccc; padding: 10px; width: 400px; height: 300px; overflow-y: scroll; margin-bottom: 10px;}
+        .msg { margin: 5px 0; padding: 5px; border-radius: 4px; }
+        .sent { background-color: #d1ffd1; text-align: right; }
+        .received { background-color: #f1f1f1; text-align: left; }
+        input { margin-bottom: 10px; padding: 5px; }
+        button { padding: 5px 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <h2>GymPartner Live Chat Test</h2>
+
+    <div>
+        <label>My User ID:</label>
+        <input type="number" id="myId" value="1" style="width: 50px;">
+        
+        <label>Chatting with User ID:</label>
+        <input type="number" id="receiverId" value="2" style="width: 50px;">
+        
+        <label>Match ID:</label>
+        <input type="number" id="matchId" value="1" style="width: 50px;">
+        
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
+    </div>
+
+    <div class="chat-container" id="chatBox">
+        <p style="color: gray; text-align: center;">-- Not connected --</p>
+    </div>
+
+    <div>
+        <input type="text" id="message" placeholder="Type a message..." style="width: 300px;">
+        <button onclick="sendMessage()" id="sendBtn" disabled>Send</button>
+    </div>
+
+    <script>
+        var stompClient = null;
+
+        function connect() {
+            var myId = document.getElementById('myId').value;
+            
+            var socket = new SockJS('/ws');
+            stompClient = Stomp.over(socket);
+
+            stompClient.debug = null; 
+
+            stompClient.connect({}, function (frame) {
+                console.log('Connected: ' + frame);
+                
+                document.getElementById('chatBox').innerHTML = '<p style="color: green; text-align: center;">-- Connected as User ' + myId + ' --</p>';
+                document.getElementById('disconnectBtn').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+
+                var subscriptionString = '/topic/chat/' + myId;
+                stompClient.subscribe(subscriptionString, function (messageOutput) {
+                    var parsed = JSON.parse(messageOutput.body);
+                    showMessage(parsed.content, 'received');
+                });
+            }, function(error) {
+                alert("Connection failed! Make sure your Spring Boot app is running.");
+            });
+        }
+
+        function disconnect() {
+            if (stompClient !== null) {
+                stompClient.disconnect();
+            }
+            document.getElementById('chatBox').innerHTML = '<p style="color: gray; text-align: center;">-- Disconnected --</p>';
+            document.getElementById('disconnectBtn').disabled = true;
+            document.getElementById('sendBtn').disabled = true;
+        }
+
+        function sendMessage() {
+            var myId = document.getElementById('myId').value;
+            var receiverId = document.getElementById('receiverId').value;
+            var matchId = document.getElementById('matchId').value;
+            var text = document.getElementById('message').value;
+
+            if(text.trim() === '') return;
+
+            var chatMessageDTO = {
+                senderId: parseInt(myId),
+                receiverId: parseInt(receiverId),
+                matchId: parseInt(matchId),
+                content: text
+            };
+
+            stompClient.send("/app/chat.send", {}, JSON.stringify(chatMessageDTO));
+            
+            showMessage(text, 'sent');
+            document.getElementById('message').value = '';
+        }
+
+        function showMessage(text, type) {
+            var chatBox = document.getElementById('chatBox');
+            var msgDiv = document.createElement('div');
+            msgDiv.classList.add('msg');
+            msgDiv.classList.add(type);
+            msgDiv.innerText = text;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    </script>
+</body>
+</html>

@@ -31,7 +31,6 @@ public class MatchService {
     private final AvailabilitySlotRepository availabilitySlotRepository;
     private final MatchingService matchingService;
     private UserService userService;
-    private Match match;
     private final UserProfileViewService userProfileViewService;
 
 
@@ -117,12 +116,10 @@ public class MatchService {
                 .receiver(receiver)
                 .status(MatchStatus.PENDING)
                 .compatibilityScore(compatibilityScore)
+                .expiresAt(LocalDateTime.now().plusDays(7))
                 .build();
 
         Match savedMatch = matchRepository.save(newMatch);
-        match.setCreatedAt(LocalDateTime.now());
-        match.setExpiresAt(LocalDateTime.now().plusDays(7));
-        match.setStatus(MatchStatus.PENDING);
 
         return mapToDTO(savedMatch);
     }
