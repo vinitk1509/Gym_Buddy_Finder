@@ -9,6 +9,9 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.Collections;
+import com.vinit.gymPartner.entity.enums.UserRole;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import java.util.Collections;
 
 
 @RequiredArgsConstructor
@@ -21,15 +24,23 @@ public class CustomUserDetails implements UserDetails {
     private String email;
     private String password;
 
+
+    private UserRole role;
+
     public CustomUserDetails(User user) {
         this.userId = user.getId();
         this.email = user.getEmail();
         this.password = user.getPassword();
+        this.role = user.getRole();
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return Collections.emptyList();
+        if (role == null) {
+            return Collections.emptyList();
+        }
+        // Spring Security's hasRole() expects the "ROLE_" prefix by default
+        return Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
 
     @Override

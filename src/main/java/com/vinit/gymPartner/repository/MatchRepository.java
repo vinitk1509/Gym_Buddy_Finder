@@ -105,4 +105,6 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
     );
 
 
+    List<Match> findByStatusAndExpiresAtBefore(MatchStatus status, LocalDateTime now);
+
 }

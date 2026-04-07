@@ -8,6 +8,8 @@ import com.vinit.gymPartner.service.FileStorageService;
 import com.vinit.gymPartner.dto.UserResponseDTO;
 import com.vinit.gymPartner.entity.User;
 import com.vinit.gymPartner.service.UserService;
+import com.vinit.gymPartner.entity.DeviceToken;
+import com.vinit.gymPartner.repository.DeviceTokenRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -25,7 +27,9 @@ public class UserController {
 
     private final UserService userService;
     private final FileStorageService fileStorageService;
+    private final DeviceTokenRepository deviceTokenRepository;
     private final UserRepository userRepository;
+
 
     @PostMapping("/register")
     public ResponseEntity<RegisterUserResponseDTO> register(
@@ -78,5 +82,26 @@ public class UserController {
         user.setProfilePictureUrl(imageUrl);
         userRepository.save(user);
         return ResponseEntity.ok(imageUrl);
+    }
+    @PostMapping("/device-token")
+    public ResponseEntity<String> registerDeviceToken(
+            @RequestParam String token,
+            @RequestParam(defaultValue = "WEB") String platform,
+            Authentication authentication) {
+
+        User user = userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Avoid duplicate tokens (same device registering twice)
+        if (deviceTokenRepository.findByToken(token).isEmpty()) {
+            DeviceToken deviceToken = DeviceToken.builder()
+                    .user(user)
+                    .token(token)
+                    .platform(platform)
+                    .build();
+            deviceTokenRepository.save(deviceToken);
+        }
+
+        return ResponseEntity.ok("Device token registered");
     }
 }

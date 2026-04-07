@@ -30,6 +30,7 @@ public class MatchService {
     private final BlockRepository blockRepository;
     private final AvailabilitySlotRepository availabilitySlotRepository;
     private final MatchingService matchingService;
+    private final NotificationService notificationService;
     private UserService userService;
     private final UserProfileViewService userProfileViewService;
 
@@ -120,8 +121,13 @@ public class MatchService {
                 .build();
 
         Match savedMatch = matchRepository.save(newMatch);
-
+        notificationService.sendToUser(
+                receiverId,
+                "New Match Request! 🏋️",
+                requester.getName() + " wants to be your gym partner!"
+        );
         return mapToDTO(savedMatch);
+
     }
 
     public MatchResponseDTO acceptmatch(Long matchId, String userEmail)
@@ -150,7 +156,16 @@ public class MatchService {
         userService.updateReliability(match.getReceiver(), +2);
 
         match.setStatus(MatchStatus.ACCEPTED);
-        return mapToDTO(matchRepository.save(match));
+        Match savedMatch = matchRepository.save(match);
+
+        // Notify the requester that their match was accepted
+        notificationService.sendToUser(
+                match.getRequester().getId(),
+                "Match Accepted! 🎉",
+                match.getReceiver().getName() + " accepted your gym partner request!"
+        );
+
+        return mapToDTO(savedMatch);
     }
 
     public MatchResponseDTO rejectMatch(Long matchId, Authentication authentication)
@@ -176,7 +191,16 @@ public class MatchService {
 
         userService.updateReliability(match.getRequester(), -1);
 
-        return mapToDTO(matchRepository.save(match));
+        Match savedMatch = matchRepository.save(match);
+
+        // Notify the requester that their match was declined
+        notificationService.sendToUser(
+                match.getRequester().getId(),
+                "Match Update",
+                "Your gym partner request was declined."
+        );
+
+        return mapToDTO(savedMatch);
     }
 
     public MatchResponseDTO cancelMatch(Long matchId, Authentication authentication)
@@ -200,7 +224,16 @@ public class MatchService {
 
         userService.updateReliability(match.getRequester(), -2);
 
-        return mapToDTO(matchRepository.save(match));
+        Match savedMatch = matchRepository.save(match);
+
+        // Notify the receiver that the match request was cancelled
+        notificationService.sendToUser(
+                match.getReceiver().getId(),
+                "Match Cancelled",
+                match.getRequester().getName() + " cancelled their gym partner request."
+        );
+
+        return mapToDTO(savedMatch);
     }
 
 
@@ -214,25 +247,37 @@ public class MatchService {
                 .orElseThrow(()->new RuntimeException("Match not found"));
 
         boolean isParticipant =
-                match.getReceiver().getId().equals(currentUser.getId());
+                match.getReceiver().getId().equals(currentUser.getId()) ||
                 match.getRequester().getId().equals(currentUser.getId());
 
-                if (!isParticipant){
-                    throw new RuntimeException("You are not part of this match");
-                }
+        if (!isParticipant) {
+            throw new RuntimeException("You are not part of this match");
+        }
 
-                if (match.getStatus() != MatchStatus.ACCEPTED){
-                    throw new RuntimeException("Only accepted matches can be terminated");
-                }
+        if (match.getStatus() != MatchStatus.ACCEPTED) {
+            throw new RuntimeException("Only accepted matches can be terminated");
+        }
 
-                match.setStatus(MatchStatus.TERMINATED);
-                match.setTerminatedAt(LocalDateTime.now());
-                match.setTerminatedBy(currentUser);
-                match.setUpdatedAt(LocalDateTime.now());
+        match.setStatus(MatchStatus.TERMINATED);
+        match.setTerminatedAt(LocalDateTime.now());
+        match.setTerminatedBy(currentUser);
+        match.setUpdatedAt(LocalDateTime.now());
 
         userService.updateReliability(currentUser, -5);
 
-                return mapToDTO(matchRepository.save(match));
+        Match savedMatch = matchRepository.save(match);
+
+        // Notify the other partner that the match was terminated
+        Long otherUserId = match.getRequester().getId().equals(currentUser.getId())
+                ? match.getReceiver().getId()
+                : match.getRequester().getId();
+        notificationService.sendToUser(
+                otherUserId,
+                "Partnership Ended",
+                currentUser.getName() + " has ended the gym partnership."
+        );
+
+        return mapToDTO(savedMatch);
     }
 
     public List<MatchResponseDTO> getMySentRequests(Authentication authentication){

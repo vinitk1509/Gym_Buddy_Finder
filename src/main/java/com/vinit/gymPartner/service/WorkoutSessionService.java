@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Service
@@ -26,6 +27,7 @@ public class WorkoutSessionService {
     private final MatchRepository matchRepository;
     private final UserRepository userRepository;
     private final AvailabilitySlotRepository availabilitySlotRepository;
+    private final NotificationService notificationService;
 
 
     public WorkoutSession createSession(Long matchId, Long creatorId, LocalDateTime start, LocalDateTime end)
@@ -66,7 +68,21 @@ public class WorkoutSessionService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        return sessionRepository.save(session);
+        WorkoutSession savedSession = sessionRepository.save(session);
+
+        // Notify the partner (not the creator) about the new session
+        Long partnerId = match.getRequester().getId().equals(creatorId)
+                ? match.getReceiver().getId()
+                : match.getRequester().getId();
+
+        String timeStr = start.format(DateTimeFormatter.ofPattern("MMM dd, hh:mm a"));
+        notificationService.sendToUser(
+                partnerId,
+                "New Workout Session 📅",
+                creator.getName() + " scheduled a workout on " + timeStr
+        );
+
+        return savedSession;
     }
     private void validateAvailability(
             Match match,
@@ -123,6 +139,18 @@ public class WorkoutSessionService {
         else
             throw new RuntimeException("User not part of this session");
 
+        // Notify the partner that attendance was confirmed
+        Long partnerId = match.getRequester().getId().equals(userId)
+                ? match.getReceiver().getId()
+                : match.getRequester().getId();
+        User confirmer = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        notificationService.sendToUser(
+                partnerId,
+                "Attendance Confirmed ✅",
+                confirmer.getName() + " confirmed their attendance for the workout session."
+        );
+
         if(Boolean.TRUE.equals(session.getRequesterConfirmed())
                 && Boolean.TRUE.equals(session.getReceiverConfirmed())){
 
@@ -157,12 +185,26 @@ public class WorkoutSessionService {
             session.setReceiverNoShow(true);
 
             UserService.updateReliability(match.getReceiver(), -20);
+
+            // Notify the no-show user
+            notificationService.sendToUser(
+                    match.getReceiver().getId(),
+                    "No-Show Report ⚠️",
+                    "Your gym partner reported you as a no-show. Your reliability score has been affected."
+            );
         }
 
         else if(match.getReceiver().getId().equals(reporterId)){
             session.setRequesterNoShow(true);
 
             UserService.updateReliability(match.getRequester(), -20);
+
+            // Notify the no-show user
+            notificationService.sendToUser(
+                    match.getRequester().getId(),
+                    "No-Show Report ⚠️",
+                    "Your gym partner reported you as a no-show. Your reliability score has been affected."
+            );
         }
     }
 
@@ -178,13 +220,25 @@ public class WorkoutSessionService {
             throw new RuntimeException("Not allowed");
 
         session.setState(SessionState.CANCELLED);
-        session.setState(SessionState.CANCELLED);
+
+        User canceller = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         UserService.updateReliability(
                 userId.equals(match.getRequester().getId())
                         ? match.getRequester()
                         : match.getReceiver(),
                 -3
+        );
+
+        // Notify the partner about cancellation
+        Long partnerId = match.getRequester().getId().equals(userId)
+                ? match.getReceiver().getId()
+                : match.getRequester().getId();
+        notificationService.sendToUser(
+                partnerId,
+                "Session Cancelled 🚫",
+                canceller.getName() + " cancelled the workout session."
         );
     }
 }

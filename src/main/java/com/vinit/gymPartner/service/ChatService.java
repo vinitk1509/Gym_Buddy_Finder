@@ -2,23 +2,29 @@ package com.vinit.gymPartner.service;
 
 import com.vinit.gymPartner.dto.ChatMessageDTO;
 import com.vinit.gymPartner.entity.ChatMessage;
+import com.vinit.gymPartner.entity.Match;
 import com.vinit.gymPartner.entity.enums.MatchStatus;
 import com.vinit.gymPartner.repository.ChatMessageRepository;
 import com.vinit.gymPartner.repository.MatchRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ChatService {
     private final ChatMessageRepository chatMessageRepository;
     private final MatchRepository matchRepository;
+    private final NotificationService notificationService;
 
+    @Transactional
     public ChatMessage sendMessage(ChatMessageDTO dto){
-        var match = matchRepository.findById(dto.getMatchId())
+        Match match = matchRepository.findById(dto.getMatchId())
                 .orElseThrow(()->new RuntimeException("Match not found"));
 
         if(match.getStatus() != MatchStatus.ACCEPTED){
@@ -39,7 +45,23 @@ public class ChatService {
                 .sentAt(LocalDateTime.now())
                 .build();
 
-        return chatMessageRepository.save(message);
+        ChatMessage savedMessage = chatMessageRepository.save(message);
+
+        // Eagerly resolve lazy-loaded names within the transaction
+        String senderName = match.getRequester().getId().equals(dto.getSenderId())
+                ? match.getRequester().getName()
+                : match.getReceiver().getName();
+
+        log.info("Chat message saved (id={}) from user {} to user {} in match {}",
+                savedMessage.getId(), dto.getSenderId(), dto.getReceiverId(), dto.getMatchId());
+
+        notificationService.sendToUser(
+                dto.getReceiverId(),
+                "New Message 💬",
+                senderName + ": " + dto.getContent()
+        );
+
+        return savedMessage;
     }
 
     public List<ChatMessage> getChatHistory(Long matchId){
