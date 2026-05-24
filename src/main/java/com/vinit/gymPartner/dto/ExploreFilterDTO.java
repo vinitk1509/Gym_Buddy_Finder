@@ -19,4 +19,5 @@ public class ExploreFilterDTO {
     private Integer minAge;
     private Integer maxAge;
     private Integer minWeeklyOverlapMinutes;
+    private Double radiusKm;
 }

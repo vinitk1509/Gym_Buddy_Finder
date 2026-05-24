@@ -1,13 +1,16 @@
 package com.vinit.gymPartner.service;
 
+import com.vinit.gymPartner.dto.BlockedUserDTO;
 import com.vinit.gymPartner.entity.Block;
 import com.vinit.gymPartner.entity.User;
 import com.vinit.gymPartner.repository.BlockRepository;
 import com.vinit.gymPartner.repository.MatchRepository;
 import com.vinit.gymPartner.repository.UserRepository;
 import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class BlockService {
@@ -44,6 +47,7 @@ public class BlockService {
         Block block = new Block();
         block.setBlocker(blocker);
         block.setBlocked(blocked);
+        block.setCreatedAt(LocalDateTime.now());
 
         blockRepository.save(block);
     }
@@ -58,5 +62,22 @@ public class BlockService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         blockRepository.deleteByBlockerAndBlocked(blocker, blocked);
+    }
+
+    @Transactional
+    public List<BlockedUserDTO> getBlockedUsers(Long blockerId) {
+        User blocker = userRepository.findById(blockerId)
+                .orElseThrow(() -> new RuntimeException("Blocker not found"));
+
+        return blockRepository.findByBlocker(blocker)
+                .stream()
+                .map(block -> BlockedUserDTO.builder()
+                        .userId(block.getBlocked().getId())
+                        .name(block.getBlocked().getName())
+                        .email(block.getBlocked().getEmail())
+                        .profilePictureUrl(block.getBlocked().getProfilePictureUrl())
+                        .blockedAt(block.getCreatedAt())
+                        .build())
+                .toList();
     }
 }

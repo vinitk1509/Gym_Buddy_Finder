@@ -3,17 +3,13 @@ package com.vinit.gymPartner.controller;
 import com.vinit.gymPartner.dto.RegisterUserRequestDTO;
 import com.vinit.gymPartner.dto.RegisterUserResponseDTO;
 import com.vinit.gymPartner.dto.UpdateProfileRequest;
-import com.vinit.gymPartner.repository.UserRepository;
-import com.vinit.gymPartner.service.FileStorageService;
 import com.vinit.gymPartner.dto.UserResponseDTO;
 import com.vinit.gymPartner.entity.User;
+import com.vinit.gymPartner.service.FileStorageService;
 import com.vinit.gymPartner.service.UserService;
-import com.vinit.gymPartner.entity.DeviceToken;
-import com.vinit.gymPartner.repository.DeviceTokenRepository;
+import com.vinit.gymPartner.repository.UserRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.Nullable;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,9 +23,7 @@ public class UserController {
 
     private final UserService userService;
     private final FileStorageService fileStorageService;
-    private final DeviceTokenRepository deviceTokenRepository;
     private final UserRepository userRepository;
-
 
     @PostMapping("/register")
     public ResponseEntity<RegisterUserResponseDTO> register(
@@ -44,8 +38,22 @@ public class UserController {
     {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        userService.recordActivity(user);
 
         return  ResponseEntity.ok(userService.getCurrentUser(email));
+    }
+
+    @PostMapping("/activity")
+    public ResponseEntity<Void> recordActivity() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        userService.recordActivity(user);
+
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/update/me")
@@ -63,45 +71,29 @@ public class UserController {
 
     @PostMapping("/profile/picture")
     public ResponseEntity<String> uploadProfilePicture(
-            @RequestParam("file")MultipartFile file,
-            Authentication authentication){
-        String contentType = file.getContentType();
+            @RequestParam("file") MultipartFile file) {
 
-        if(contentType == null || !contentType.startsWith("image/")){
-            return ResponseEntity.badRequest().body("Only image files are allowed");
-        }
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+        String email = authentication.getName();
 
-        if(file.getSize() > 5 * 1024 * 1024){
-            return ResponseEntity.badRequest().body("File size must be under 5MB");
-        }
-
-        String imageUrl = fileStorageService.storeFile(file);
-
-        User user = userRepository.findByEmail(authentication.getName())
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        user.setProfilePictureUrl(imageUrl);
+
+        String fileUrl = fileStorageService.storeFile(file);
+        user.setProfilePictureUrl(fileUrl);
         userRepository.save(user);
-        return ResponseEntity.ok(imageUrl);
+
+        return ResponseEntity.ok(fileUrl);
     }
-    @PostMapping("/device-token")
-    public ResponseEntity<String> registerDeviceToken(
-            @RequestParam String token,
-            @RequestParam(defaultValue = "WEB") String platform,
-            Authentication authentication) {
 
-        User user = userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+    @DeleteMapping("/me")
+    public ResponseEntity<String> deleteAccount() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String email = authentication.getName();
 
-        // Avoid duplicate tokens (same device registering twice)
-        if (deviceTokenRepository.findByToken(token).isEmpty()) {
-            DeviceToken deviceToken = DeviceToken.builder()
-                    .user(user)
-                    .token(token)
-                    .platform(platform)
-                    .build();
-            deviceTokenRepository.save(deviceToken);
-        }
+        userService.requestAccountDeletion(email);
 
-        return ResponseEntity.ok("Device token registered");
+        return ResponseEntity.ok("Account deletion requested. Your account is now inactive and will be permanently deleted after 30 days.");
     }
 }

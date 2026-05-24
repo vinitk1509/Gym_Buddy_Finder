@@ -18,10 +18,8 @@ public class DashboardResponseDTO {
     private int blockedCount;
 
     private List<MatchResultDTO> suggestedPartners;
-    private List<ActiveMatchDTO> activeMatches;
-    private List<PendingMatchDTO> pendingSentRequests;
-    private List<PendingMatchDTO> pendingReceivedRequests;
-    private  String message;
-
-
+    private List<MatchResponseDTO> activeMatches;
+    private List<MatchResponseDTO> pendingSentRequests;
+    private List<MatchResponseDTO> pendingReceivedRequests;
+    private String message;
 }

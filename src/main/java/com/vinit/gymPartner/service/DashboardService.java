@@ -1,14 +1,14 @@
 package com.vinit.gymPartner.service;
 
-import com.vinit.gymPartner.dto.ActiveMatchDTO;
 import com.vinit.gymPartner.dto.DashboardResponseDTO;
+import com.vinit.gymPartner.dto.MatchResponseDTO;
 import com.vinit.gymPartner.dto.MatchResultDTO;
-import com.vinit.gymPartner.dto.PendingMatchDTO;
 import com.vinit.gymPartner.entity.AvailabilitySlot;
 import com.vinit.gymPartner.entity.FitnessProfile;
 import com.vinit.gymPartner.entity.Match;
 import com.vinit.gymPartner.entity.User;
 import com.vinit.gymPartner.entity.enums.MatchStatus;
+import com.vinit.gymPartner.entity.enums.UserRole;
 import com.vinit.gymPartner.repository.*;
 import lombok.*;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -29,18 +30,28 @@ public class DashboardService {
     private final MatchingService matchingService;
     private final AvailabilitySlotRepository availabilitySlotRepository;
     private final FitnessProfileRepository fitnessProfileRepository;
+
     public DashboardResponseDTO buildDashboard(Long userId) {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        boolean profileComplete =
+        List<AvailabilitySlot> slots =
+                availabilitySlotRepository.findByUserId(userId);
+
+        boolean hasFitnessProfile =
                 fitnessProfileRepository.existsByUser_Id(userId);
 
+        boolean profileComplete =
+                hasFitnessProfile && user.getGym() != null && !slots.isEmpty();
+
         boolean hasActiveMatch =
-                matchRepository.existsByRequesterOrReceiverAndStatus(
-                        user, user, MatchStatus.ACCEPTED
-                );
+                user.getGym() != null
+                        && matchRepository.findAllByUserAndStatus(user, MatchStatus.ACCEPTED)
+                                .stream()
+                                .anyMatch(match -> isVisibleToUser(match, user)
+                                        && match.getGym() != null
+                                        && match.getGym().getId().equals(user.getGym().getId()));
 
         int blockedCount =
                 blockRepository.countByBlocker(user);
@@ -48,16 +59,13 @@ public class DashboardService {
         List<MatchResultDTO> suggestions = new ArrayList<>();
         String message = null;
 
-        List<AvailabilitySlot> slots =
-                availabilitySlotRepository.findByUserId(userId);
-
         if (!user.isLookingForPartner()) {
             message = "Enable matching to see suggestions.";
         }
-        else if (!profileComplete) {
+        else if (!hasFitnessProfile || user.getGym() == null) {
             message = "Complete your profile to start matching.";
         } else if (slots.isEmpty()) {
-            message = "Add availability to start matching.";
+            message = "Complete your profile by adding availability.";
         } else if (hasActiveMatch && !user.getAllowMultiplePartners()) {
             message = "You already have an active partner.";
         }
@@ -69,13 +77,13 @@ public class DashboardService {
                     .toList();
         }
 
-        List<ActiveMatchDTO> activeMatches =
+        List<MatchResponseDTO> activeMatches =
                 buildActiveMatches(user);
 
-        List<PendingMatchDTO> pendingSent =
+        List<MatchResponseDTO> pendingSent =
                 buildPendingMatches(user, true);
 
-        List<PendingMatchDTO> pendingReceived =
+        List<MatchResponseDTO> pendingReceived =
                 buildPendingMatches(user, false);
 
         return DashboardResponseDTO.builder()
@@ -90,35 +98,19 @@ public class DashboardService {
                 .message(message)
                 .build();
     }
-    private List<ActiveMatchDTO> buildActiveMatches(User user) {
+
+    private List<MatchResponseDTO> buildActiveMatches(User user) {
 
         List<Match> matches =
-                matchRepository.findAllByRequesterOrReceiverAndStatus(
-                        user, user, MatchStatus.ACCEPTED
-                );
+                matchRepository.findAllByUserAndStatus(user, MatchStatus.ACCEPTED);
 
-        return matches.stream().map(match -> {
-
-            User partner =
-                    match.getRequester().equals(user)
-                            ? match.getReceiver()
-                            : match.getRequester();
-
-            FitnessProfile profile =
-                    partner.getFitnessProfile();
-
-            return ActiveMatchDTO.builder()
-                    .matchId(match.getId())
-                    .partnerId(partner.getId())
-                    .partnerName(partner.getName())
-                    .partnerAge(partner.getAge())
-                    .goal(profile.getGoal().name())
-                    .experience(profile.getExperienceLevel().name())
-                    .build();
-        }).toList();
+        return matches.stream()
+                .filter(match -> isVisibleToUser(match, user))
+                .map(this::mapToDTO)
+                .toList();
     }
 
-    private List<PendingMatchDTO> buildPendingMatches(
+    private List<MatchResponseDTO> buildPendingMatches(
             User user,
             boolean sent
     ) {
@@ -133,17 +125,78 @@ public class DashboardService {
                     .findByReceiverIdAndStatus(user.getId(), MatchStatus.PENDING);
         }
 
-        return matches.stream().map(match -> {
+        return matches.stream()
+                .filter(match -> isVisibleToUser(match, user))
+                .map(this::mapToDTO)
+                .toList();
+    }
 
-            User otherUser =
-                    sent ? match.getReceiver() : match.getRequester();
+    private boolean isVisibleToUser(Match match, User user) {
+        if (user.getRole() == UserRole.ADMIN) {
+            return true;
+        }
 
-            return PendingMatchDTO.builder()
-                    .matchId(match.getId())
-                    .userId(otherUser.getId())
-                    .name(otherUser.getName())
-                    .type(sent ? "SENT" : "RECEIVED")
-                    .build();
-        }).toList();
+        return match.getRequester().getRole() != UserRole.ADMIN
+                && match.getReceiver().getRole() != UserRole.ADMIN;
+    }
+
+    private MatchResponseDTO mapToDTO(Match match) {
+
+        MatchResponseDTO dto = new MatchResponseDTO();
+
+        dto.setId(match.getId());
+
+        User requester = match.getRequester();
+        dto.setRequesterId(requester.getId());
+        dto.setRequesterEmail(requester.getEmail());
+        dto.setRequesterName(requester.getName());
+        dto.setRequesterProfilePicture(requester.getProfilePictureUrl());
+        dto.setRequesterGymName(requester.getGym() != null ? requester.getGym().getName() : null);
+        dto.setRequesterAge(requester.getAge());
+        dto.setRequesterReliabilityScore(requester.getReliabilityScore());
+        dto.setRequesterActiveNow(isActiveNow(requester));
+        dto.setRequesterTargetGroupSize(requester.getTargetGroupSize());
+        if (requester.getFitnessProfile() != null) {
+            FitnessProfile rp = requester.getFitnessProfile();
+            dto.setRequesterFitnessGoal(rp.getGoal() != null ? rp.getGoal().name() : null);
+            dto.setRequesterWorkoutType(rp.getWorkoutType() != null ? rp.getWorkoutType().name() : null);
+            dto.setRequesterExperienceLevel(rp.getExperienceLevel() != null ? rp.getExperienceLevel().name() : null);
+        }
+
+        User receiver = match.getReceiver();
+        dto.setReceiverId(receiver.getId());
+        dto.setReceiverEmail(receiver.getEmail());
+        dto.setReceiverName(receiver.getName());
+        dto.setReceiverProfilePicture(receiver.getProfilePictureUrl());
+        dto.setReceiverGymName(receiver.getGym() != null ? receiver.getGym().getName() : null);
+        dto.setReceiverAge(receiver.getAge());
+        dto.setReceiverReliabilityScore(receiver.getReliabilityScore());
+        dto.setReceiverActiveNow(isActiveNow(receiver));
+        dto.setReceiverTargetGroupSize(receiver.getTargetGroupSize());
+        if (receiver.getFitnessProfile() != null) {
+            FitnessProfile rcp = receiver.getFitnessProfile();
+            dto.setReceiverFitnessGoal(rcp.getGoal() != null ? rcp.getGoal().name() : null);
+            dto.setReceiverWorkoutType(rcp.getWorkoutType() != null ? rcp.getWorkoutType().name() : null);
+            dto.setReceiverExperienceLevel(rcp.getExperienceLevel() != null ? rcp.getExperienceLevel().name() : null);
+        }
+
+        dto.setStatus(match.getStatus().name());
+        dto.setCompatibilityScore(match.getCompatibilityScore());
+
+        dto.setCreatedAt(match.getCreatedAt());
+        dto.setUpdatedAt(match.getUpdatedAt());
+        dto.setTerminatedAt(match.getTerminatedAt());
+
+        if (match.getTerminatedBy() != null) {
+            dto.setTerminatedById(match.getTerminatedBy().getId());
+            dto.setTerminatedByName(match.getTerminatedBy().getName());
+        }
+
+        return dto;
+    }
+
+    private boolean isActiveNow(User user) {
+        return user.getLastSeenAt() != null
+                && user.getLastSeenAt().isAfter(LocalDateTime.now().minusMinutes(5));
     }
 }

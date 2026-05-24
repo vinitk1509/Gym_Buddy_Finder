@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -25,6 +26,7 @@ public class UserResponseDTO {
     private Integer reliabilityScore;
     private Boolean allowMultiplePartners;
     private Boolean lookingForPartner;
+    private Integer targetGroupSize;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     
@@ -32,4 +34,12 @@ public class UserResponseDTO {
     private String experienceLevel;
     private String fitnessGoal;
     private String workoutType;
+
+    private String profilePictureUrl;
+    private String bio;
+    private Integer age;
+    private LocalDate dateOfBirth;
+    private Long totalSessions;
+    private Long completedSessions;
+    private Integer currentStreakDays;
 }

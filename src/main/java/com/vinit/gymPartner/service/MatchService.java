@@ -5,17 +5,20 @@ import com.vinit.gymPartner.dto.UserResponseDTO;
 import com.vinit.gymPartner.entity.Match;
 import com.vinit.gymPartner.entity.User;
 import com.vinit.gymPartner.entity.enums.MatchStatus;
+import com.vinit.gymPartner.entity.enums.UserRole;
 import com.vinit.gymPartner.entity.enums.UserStatus;
 import com.vinit.gymPartner.repository.BlockRepository;
 import com.vinit.gymPartner.repository.MatchRepository;
 import com.vinit.gymPartner.repository.UserRepository;
 import com.vinit.gymPartner.repository.AvailabilitySlotRepository;
+import com.vinit.gymPartner.repository.WorkoutSessionRepository;
 import com.vinit.gymPartner.entity.AvailabilitySlot;
 import com.vinit.gymPartner.entity.FitnessProfile;
 import lombok.RequiredArgsConstructor;
-import org.apache.catalina.LifecycleState;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -30,13 +33,15 @@ public class MatchService {
     private final BlockRepository blockRepository;
     private final AvailabilitySlotRepository availabilitySlotRepository;
     private final MatchingService matchingService;
-    private final NotificationService notificationService;
-    private UserService userService;
+    private final EmailService emailService;
+    private final UserService userService;
     private final UserProfileViewService userProfileViewService;
+    private final WorkoutSessionRepository workoutSessionRepository;
 
 
     private static final int DAILY_LIMIT = 10;
 
+    @Transactional
     public MatchResponseDTO sendMatchRequest(Long requesterId, Long receiverId)
     {
         LocalDateTime startOfDay =
@@ -51,6 +56,10 @@ public class MatchService {
                 .orElseThrow(()->new RuntimeException("Requester not found"));
         User receiver = userRepository.findById(receiverId)
                 .orElseThrow(()->new RuntimeException("receiver not found"));
+
+        if (requester.getRole() == UserRole.ADMIN || receiver.getRole() == UserRole.ADMIN) {
+            throw new RuntimeException("Admin accounts cannot use regular matching");
+        }
 
         long todayCount =
                 matchRepository.countTodayRequests(
@@ -80,18 +89,14 @@ public class MatchService {
         if (requesterProfile == null || receiverProfile == null) {
             throw new RuntimeException("Both users must have completed their fitness profiles.");
         }
-
-        if (requesterProfile.getGoal() != receiverProfile.getGoal()) {
-            throw new RuntimeException("Matching requires having the exact same fitness goal.");
-        }
         // ----------------------------------------
 
-        Match existingMatch = matchRepository
-                .findByRequesterIdAndReceiverIdOrRequesterIdAndReceiverId(
-                        requesterId,receiverId,
-                        receiverId,requesterId
-                ).orElse(null);
+        List<Match> existingMatches =
+                matchRepository.findMatchesBetweenUsers(requesterId, receiverId);
 
+        Match existingMatch = existingMatches.isEmpty() ? null : existingMatches.get(0);
+
+        Match matchToSave;
         if (existingMatch != null){
             switch (existingMatch.getStatus()){
                 case PENDING:
@@ -105,27 +110,33 @@ public class MatchService {
                 case TERMINATED:
                 case REJECTED:
                 case CANCELLED:
+                    // Reuse the existing match entity instead of duplicating!
+                    workoutSessionRepository.deleteByMatch(existingMatch);
+                    existingMatch.setStatus(MatchStatus.PENDING);
+                    existingMatch.setGym(requester.getGym());
+                    existingMatch.setRequester(requester);
+                    existingMatch.setReceiver(receiver);
+                    existingMatch.setCompatibilityScore(calculateCompatibility(requester, receiver));
+                    existingMatch.setExpiresAt(LocalDateTime.now().plusDays(7));
+                    matchToSave = existingMatch;
                     break;
-
-                default: throw new IllegalStateException("Unexpected match state");
+                default: 
+                    throw new IllegalStateException("Unexpected match state");
             }
+        } else {
+            double compatibilityScore = calculateCompatibility(requester, receiver);
+            matchToSave = Match.builder()
+                    .gym(requester.getGym())
+                    .requester(requester)
+                    .receiver(receiver)
+                    .status(MatchStatus.PENDING)
+                    .compatibilityScore(compatibilityScore)
+                    .expiresAt(LocalDateTime.now().plusDays(7))
+                    .build();
         }
-        double compatibilityScore = calculateCompatibility(requester, receiver);
 
-        Match newMatch = Match.builder()
-                .requester(requester)
-                .receiver(receiver)
-                .status(MatchStatus.PENDING)
-                .compatibilityScore(compatibilityScore)
-                .expiresAt(LocalDateTime.now().plusDays(7))
-                .build();
-
-        Match savedMatch = matchRepository.save(newMatch);
-        notificationService.sendToUser(
-                receiverId,
-                "New Match Request! 🏋️",
-                requester.getName() + " wants to be your gym partner!"
-        );
+        Match savedMatch = matchRepository.save(matchToSave);
+        emailService.sendMatchRequestEmail(receiver.getEmail(), receiver.getName(), requester.getName());
         return mapToDTO(savedMatch);
 
     }
@@ -158,13 +169,6 @@ public class MatchService {
         match.setStatus(MatchStatus.ACCEPTED);
         Match savedMatch = matchRepository.save(match);
 
-        // Notify the requester that their match was accepted
-        notificationService.sendToUser(
-                match.getRequester().getId(),
-                "Match Accepted! 🎉",
-                match.getReceiver().getName() + " accepted your gym partner request!"
-        );
-
         return mapToDTO(savedMatch);
     }
 
@@ -193,13 +197,6 @@ public class MatchService {
 
         Match savedMatch = matchRepository.save(match);
 
-        // Notify the requester that their match was declined
-        notificationService.sendToUser(
-                match.getRequester().getId(),
-                "Match Update",
-                "Your gym partner request was declined."
-        );
-
         return mapToDTO(savedMatch);
     }
 
@@ -226,17 +223,11 @@ public class MatchService {
 
         Match savedMatch = matchRepository.save(match);
 
-        // Notify the receiver that the match request was cancelled
-        notificationService.sendToUser(
-                match.getReceiver().getId(),
-                "Match Cancelled",
-                match.getRequester().getName() + " cancelled their gym partner request."
-        );
-
         return mapToDTO(savedMatch);
     }
 
 
+    @Transactional
     public MatchResponseDTO terminateMatch(Long matchId, Authentication authentication)
     {
         String email = authentication.getName();
@@ -263,19 +254,11 @@ public class MatchService {
         match.setTerminatedBy(currentUser);
         match.setUpdatedAt(LocalDateTime.now());
 
+        workoutSessionRepository.deleteByMatch(match);
+
         userService.updateReliability(currentUser, -5);
 
         Match savedMatch = matchRepository.save(match);
-
-        // Notify the other partner that the match was terminated
-        Long otherUserId = match.getRequester().getId().equals(currentUser.getId())
-                ? match.getReceiver().getId()
-                : match.getRequester().getId();
-        notificationService.sendToUser(
-                otherUserId,
-                "Partnership Ended",
-                currentUser.getName() + " has ended the gym partnership."
-        );
 
         return mapToDTO(savedMatch);
     }
@@ -286,6 +269,7 @@ public class MatchService {
         return matchRepository
                 .findByRequesterIdAndStatus(user.getId(), MatchStatus.PENDING)
                 .stream()
+                .filter(match -> isVisibleToUser(match, user))
                 .map(this::mapToDTO)
                 .toList();
     }
@@ -297,6 +281,7 @@ public class MatchService {
         return matchRepository
                 .findByReceiverIdAndStatus(user.getId(), MatchStatus.PENDING)
                 .stream()
+                .filter(match -> isVisibleToUser(match, user))
                 .map(this::mapToDTO)
                 .toList();
     }
@@ -306,10 +291,10 @@ public class MatchService {
         User user = getCurrentUser(authentication);
 
         return matchRepository
-                .findByStatusAndRequesterIdOrStatusAndReceiverId(
-                        MatchStatus.ACCEPTED, user.getId(),
-                        MatchStatus.ACCEPTED, user.getId())
+                .findByRequesterIdOrReceiverId(user.getId(), user.getId())
                 .stream()
+                .filter(m -> m.getStatus() == MatchStatus.ACCEPTED)
+                .filter(match -> isVisibleToUser(match, user))
                 .map(this::mapToDTO)
                 .toList();
     }
@@ -321,6 +306,7 @@ public class MatchService {
         return matchRepository
                 .findByRequesterIdOrReceiverId(user.getId(), user.getId())
                 .stream()
+                .filter(match -> isVisibleToUser(match, user))
                 .map(this::mapToDTO)
                 .toList();
     }
@@ -328,6 +314,15 @@ public class MatchService {
     private User getCurrentUser(Authentication authentication) {
         return userRepository.findByEmail(authentication.getName())
                 .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    private boolean isVisibleToUser(Match match, User user) {
+        if (user.getRole() == UserRole.ADMIN) {
+            return true;
+        }
+
+        return match.getRequester().getRole() != UserRole.ADMIN
+                && match.getReceiver().getRole() != UserRole.ADMIN;
     }
 
     public List<UserResponseDTO> getSuggestedUsers(Authentication authentication) {
@@ -363,11 +358,40 @@ public class MatchService {
         MatchResponseDTO dto = new MatchResponseDTO();
 
         dto.setId(match.getId());
-        dto.setRequesterId(match.getRequester().getId());
-        dto.setRequesterEmail(match.getRequester().getEmail());
 
-        dto.setReceiverId(match.getReceiver().getId());
-        dto.setReceiverEmail(match.getReceiver().getEmail());
+        User requester = match.getRequester();
+        dto.setRequesterId(requester.getId());
+        dto.setRequesterEmail(requester.getEmail());
+        dto.setRequesterName(ChatService.displayName(requester));
+        dto.setRequesterProfilePicture(requester.getProfilePictureUrl());
+        dto.setRequesterGymName(requester.getGym() != null ? requester.getGym().getName() : null);
+        dto.setRequesterAge(requester.getAge());
+        dto.setRequesterReliabilityScore(requester.getReliabilityScore());
+        dto.setRequesterActiveNow(isActiveNow(requester));
+        dto.setRequesterTargetGroupSize(requester.getTargetGroupSize());
+        if (requester.getFitnessProfile() != null) {
+            FitnessProfile rp = requester.getFitnessProfile();
+            dto.setRequesterFitnessGoal(rp.getGoal() != null ? rp.getGoal().name() : null);
+            dto.setRequesterWorkoutType(rp.getWorkoutType() != null ? rp.getWorkoutType().name() : null);
+            dto.setRequesterExperienceLevel(rp.getExperienceLevel() != null ? rp.getExperienceLevel().name() : null);
+        }
+
+        User receiver = match.getReceiver();
+        dto.setReceiverId(receiver.getId());
+        dto.setReceiverEmail(receiver.getEmail());
+        dto.setReceiverName(ChatService.displayName(receiver));
+        dto.setReceiverProfilePicture(receiver.getProfilePictureUrl());
+        dto.setReceiverGymName(receiver.getGym() != null ? receiver.getGym().getName() : null);
+        dto.setReceiverAge(receiver.getAge());
+        dto.setReceiverReliabilityScore(receiver.getReliabilityScore());
+        dto.setReceiverActiveNow(isActiveNow(receiver));
+        dto.setReceiverTargetGroupSize(receiver.getTargetGroupSize());
+        if (receiver.getFitnessProfile() != null) {
+            FitnessProfile rcp = receiver.getFitnessProfile();
+            dto.setReceiverFitnessGoal(rcp.getGoal() != null ? rcp.getGoal().name() : null);
+            dto.setReceiverWorkoutType(rcp.getWorkoutType() != null ? rcp.getWorkoutType().name() : null);
+            dto.setReceiverExperienceLevel(rcp.getExperienceLevel() != null ? rcp.getExperienceLevel().name() : null);
+        }
 
         dto.setStatus(match.getStatus().name());
         dto.setCompatibilityScore(match.getCompatibilityScore());
@@ -376,6 +400,16 @@ public class MatchService {
         dto.setUpdatedAt(match.getUpdatedAt());
         dto.setTerminatedAt(match.getTerminatedAt());
 
+        if (match.getTerminatedBy() != null) {
+            dto.setTerminatedById(match.getTerminatedBy().getId());
+            dto.setTerminatedByName(ChatService.displayName(match.getTerminatedBy()));
+        }
+
         return dto;
+    }
+
+    private boolean isActiveNow(User user) {
+        return user.getLastSeenAt() != null
+                && user.getLastSeenAt().isAfter(LocalDateTime.now().minusMinutes(5));
     }
 }

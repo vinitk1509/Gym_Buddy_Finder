@@ -20,6 +20,9 @@ public class JwtService {
     @Value("${jwt.expiration}")
     private long expiration;
 
+    @Value("${jwt.reset-expiration}")
+    private long resetExpiration;
+
     private Key getSigningKey()
     {
         return Keys.hmacShaKeyFor(secret.getBytes());  //converts your secret string into a secure key object
@@ -27,11 +30,20 @@ public class JwtService {
 
     public String generateToken(Long userId, String email)
     {
+        return buildToken(userId, email, expiration, "access");
+    }
+
+    public String generatePasswordResetToken(Long userId, String email) {
+        return buildToken(userId, email, resetExpiration, "password_reset");
+    }
+
+    private String buildToken(Long userId, String email, long tokenExpiration, String purpose) {
         return Jwts.builder()
                 .setSubject(email) //Subject = main identity of the user.
                 .claim("userId", userId)   //Claim = extra information stored in JWT.
+                .claim("purpose", purpose)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .setExpiration(new Date(System.currentTimeMillis() + tokenExpiration))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)   //Sign it (prove it's real)
                 .compact();  //Converts it to String and return it
     }
@@ -59,6 +71,15 @@ public class JwtService {
         try {
             extractAllClaims(token);
             return true;
+        } catch (JwtException e) {
+            return false;
+        }
+    }
+
+    public boolean isPasswordResetTokenValid(String token) {
+        try {
+            Claims claims = extractAllClaims(token);
+            return "password_reset".equals(claims.get("purpose", String.class));
         } catch (JwtException e) {
             return false;
         }

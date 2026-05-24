@@ -24,7 +24,7 @@ public class MatchingController {
 
     public final MatchingService matchingService;
     public final UserRepository userRepository;
-    public LocationService locationService;
+    public final LocationService locationService;
 
     @GetMapping
     public ResponseEntity<List<MatchResultDTO>> getSuggestions(

@@ -13,6 +13,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntime(RuntimeException ex) {
+        ex.printStackTrace(); // Log the exception to see what's causing the 400
 
         ErrorResponse error = new ErrorResponse(
                 LocalDateTime.now(),
@@ -38,6 +39,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(
             MethodArgumentNotValidException ex) {
+        ex.printStackTrace(); // DEBUG
 
         String error = ex.getBindingResult()
                 .getFieldErrors()

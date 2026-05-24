@@ -3,6 +3,8 @@ package com.vinit.gymPartner.entity;
 import com.vinit.gymPartner.entity.enums.SessionState;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -35,7 +37,8 @@ public class WorkoutSession {
     private LocalDateTime endDateTime;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 32)
     private SessionState state;
 
     @ManyToOne(fetch = FetchType.LAZY)

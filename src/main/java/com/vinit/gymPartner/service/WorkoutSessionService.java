@@ -10,12 +10,16 @@ import com.vinit.gymPartner.repository.AvailabilitySlotRepository;
 import com.vinit.gymPartner.repository.MatchRepository;
 import com.vinit.gymPartner.repository.UserRepository;
 import com.vinit.gymPartner.repository.WorkoutSessionRepository;
+import com.vinit.gymPartner.dto.AvailabilitySlotDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -27,7 +31,8 @@ public class WorkoutSessionService {
     private final MatchRepository matchRepository;
     private final UserRepository userRepository;
     private final AvailabilitySlotRepository availabilitySlotRepository;
-    private final NotificationService notificationService;
+    private final EmailService emailService;
+    private final UserService userService;
 
 
     public WorkoutSession createSession(Long matchId, Long creatorId, LocalDateTime start, LocalDateTime end)
@@ -41,7 +46,7 @@ public class WorkoutSessionService {
         if(start.isBefore(LocalDateTime.now()))
             throw new RuntimeException("Session must be in future");
 
-        if(end.isBefore(start))
+        if(!end.isAfter(start))
             throw new RuntimeException("Invalid session time");
 
         if(!match.getRequester().getId().equals(creatorId)
@@ -54,13 +59,18 @@ public class WorkoutSessionService {
         validateAvailability(match, start, end);
         validateOverlap(matchId, start, end);
 
+        com.vinit.gymPartner.entity.Gym sessionGym = match.getGym();
+        if (sessionGym == null) {
+            sessionGym = match.getRequester().getGym();
+        }
+
         WorkoutSession session = WorkoutSession.builder()
                 .match(match)
-                .gym(match.getGym())
+                .gym(sessionGym)
                 .startDateTime(start)
                 .endDateTime(end)
                 .createdBy(creator)
-                .state(SessionState.SCHEDULED)
+                .state(SessionState.PENDING_APPROVAL)  // Partner must approve first
                 .requesterConfirmed(false)
                 .receiverConfirmed(false)
                 .requesterNoShow(false)
@@ -70,20 +80,58 @@ public class WorkoutSessionService {
 
         WorkoutSession savedSession = sessionRepository.save(session);
 
-        // Notify the partner (not the creator) about the new session
-        Long partnerId = match.getRequester().getId().equals(creatorId)
-                ? match.getReceiver().getId()
-                : match.getRequester().getId();
+        // Notify the partner to accept or decline
+        User partner = match.getRequester().getId().equals(creatorId)
+                ? match.getReceiver()
+                : match.getRequester();
 
         String timeStr = start.format(DateTimeFormatter.ofPattern("MMM dd, hh:mm a"));
-        notificationService.sendToUser(
-                partnerId,
-                "New Workout Session 📅",
-                creator.getName() + " scheduled a workout on " + timeStr
-        );
+        emailService.sendSessionProposalEmail(partner.getEmail(), partner.getName(), creator.getName(), timeStr);
 
         return savedSession;
     }
+    public void approveSession(Long sessionId, Long userId) {
+        WorkoutSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Session not found"));
+
+        if (session.getState() != SessionState.PENDING_APPROVAL)
+            throw new RuntimeException("Session is not waiting for approval");
+
+        Match match = session.getMatch();
+
+        // Only the partner (not the creator) can approve
+        if (session.getCreatedBy().getId().equals(userId))
+            throw new RuntimeException("You cannot approve your own session request");
+
+        if (!match.getRequester().getId().equals(userId) && !match.getReceiver().getId().equals(userId))
+            throw new RuntimeException("You are not part of this session");
+
+        session.setState(SessionState.SCHEDULED);
+        sessionRepository.save(session);
+
+    }
+
+    public void declineSession(Long sessionId, Long userId) {
+        WorkoutSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Session not found"));
+
+        if (session.getState() != SessionState.PENDING_APPROVAL)
+            throw new RuntimeException("Session is not waiting for approval");
+
+        Match match = session.getMatch();
+
+        // Only the partner (not the creator) can decline
+        if (session.getCreatedBy().getId().equals(userId))
+            throw new RuntimeException("You cannot decline your own session request");
+
+        if (!match.getRequester().getId().equals(userId) && !match.getReceiver().getId().equals(userId))
+            throw new RuntimeException("You are not part of this session");
+
+        session.setState(SessionState.DECLINED);
+        sessionRepository.save(session);
+
+    }
+
     private void validateAvailability(
             Match match,
             LocalDateTime start,
@@ -139,25 +187,13 @@ public class WorkoutSessionService {
         else
             throw new RuntimeException("User not part of this session");
 
-        // Notify the partner that attendance was confirmed
-        Long partnerId = match.getRequester().getId().equals(userId)
-                ? match.getReceiver().getId()
-                : match.getRequester().getId();
-        User confirmer = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        notificationService.sendToUser(
-                partnerId,
-                "Attendance Confirmed ✅",
-                confirmer.getName() + " confirmed their attendance for the workout session."
-        );
-
         if(Boolean.TRUE.equals(session.getRequesterConfirmed())
                 && Boolean.TRUE.equals(session.getReceiverConfirmed())){
 
             session.setState(SessionState.COMPLETED);
 
-            UserService.updateReliability(match.getRequester(), +5);
-            UserService.updateReliability(match.getReceiver(), +5);
+            userService.updateReliability(match.getRequester(), +5);
+            userService.updateReliability(match.getReceiver(), +5);
         }
     }
 
@@ -184,27 +220,15 @@ public class WorkoutSessionService {
         if(match.getRequester().getId().equals(reporterId)){
             session.setReceiverNoShow(true);
 
-            UserService.updateReliability(match.getReceiver(), -20);
+            userService.updateReliability(match.getReceiver(), -20);
 
-            // Notify the no-show user
-            notificationService.sendToUser(
-                    match.getReceiver().getId(),
-                    "No-Show Report ⚠️",
-                    "Your gym partner reported you as a no-show. Your reliability score has been affected."
-            );
         }
 
         else if(match.getReceiver().getId().equals(reporterId)){
             session.setRequesterNoShow(true);
 
-            UserService.updateReliability(match.getRequester(), -20);
+            userService.updateReliability(match.getRequester(), -20);
 
-            // Notify the no-show user
-            notificationService.sendToUser(
-                    match.getRequester().getId(),
-                    "No-Show Report ⚠️",
-                    "Your gym partner reported you as a no-show. Your reliability score has been affected."
-            );
         }
     }
 
@@ -219,26 +243,85 @@ public class WorkoutSessionService {
                 && !match.getReceiver().getId().equals(userId))
             throw new RuntimeException("Not allowed");
 
+        if (session.getState() != SessionState.PENDING_APPROVAL
+                && session.getState() != SessionState.SCHEDULED) {
+            throw new RuntimeException("Only pending or scheduled sessions can be cancelled");
+        }
+
+        if (session.getStartDateTime().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Past sessions cannot be cancelled");
+        }
+
+        int reliabilityDelta = session.getState() == SessionState.SCHEDULED
+                && Duration.between(LocalDateTime.now(), session.getStartDateTime()).toHours() < 12
+                ? UserService.LATE_CANCEL_PENALTY
+                : -3;
+
         session.setState(SessionState.CANCELLED);
 
         User canceller = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        UserService.updateReliability(
+        userService.updateReliability(
                 userId.equals(match.getRequester().getId())
                         ? match.getRequester()
                         : match.getReceiver(),
-                -3
+                reliabilityDelta
         );
 
-        // Notify the partner about cancellation
-        Long partnerId = match.getRequester().getId().equals(userId)
-                ? match.getReceiver().getId()
-                : match.getRequester().getId();
-        notificationService.sendToUser(
-                partnerId,
-                "Session Cancelled 🚫",
-                canceller.getName() + " cancelled the workout session."
-        );
+    }
+
+    public List<WorkoutSession> getSessionsByUser(Long userId) {
+        return sessionRepository.findByUserId(userId);
+    }
+
+    public List<AvailabilitySlotDTO> getMutualAvailability(Long matchId) {
+        Match match = matchRepository.findById(matchId)
+                .orElseThrow(() -> new RuntimeException("Match not found"));
+        return buildMutualAvailability(match);
+    }
+
+    public List<AvailabilitySlotDTO> getMutualAvailability(Long matchId, Long userId) {
+        Match match = matchRepository.findById(matchId)
+                .orElseThrow(() -> new RuntimeException("Match not found"));
+
+        if (!match.getRequester().getId().equals(userId)
+                && !match.getReceiver().getId().equals(userId)) {
+            throw new RuntimeException("You are not part of this match");
+        }
+
+        return buildMutualAvailability(match);
+    }
+
+    private List<AvailabilitySlotDTO> buildMutualAvailability(Match match) {
+        List<AvailabilitySlot> requesterSlots = availabilitySlotRepository.findByUserId(match.getRequester().getId());
+        List<AvailabilitySlot> receiverSlots = availabilitySlotRepository.findByUserId(match.getReceiver().getId());
+
+        List<AvailabilitySlotDTO> mutualSlots = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+
+        for (AvailabilitySlot r : requesterSlots) {
+            for (AvailabilitySlot s : receiverSlots) {
+                if (r.getDayOfWeek().equals(s.getDayOfWeek())) {
+                    // Check for overlap: r.start < s.end AND r.end > s.start
+                    if (r.getStartTime().isBefore(s.getEndTime()) && r.getEndTime().isAfter(s.getStartTime())) {
+                        
+                        LocalTime mutualStart = r.getStartTime().isAfter(s.getStartTime()) ? r.getStartTime() : s.getStartTime();
+                        LocalTime mutualEnd = r.getEndTime().isBefore(s.getEndTime()) ? r.getEndTime() : s.getEndTime();
+
+                        String key = r.getDayOfWeek().name() + "-" + mutualStart + "-" + mutualEnd;
+                        if (seen.add(key)) {
+                            mutualSlots.add(AvailabilitySlotDTO.builder()
+                                    .dayOfWeek(r.getDayOfWeek().name())
+                                    .startTime(mutualStart.toString())
+                                    .endTime(mutualEnd.toString())
+                                    .build());
+                        }
+                    }
+                }
+            }
+        }
+
+        return mutualSlots;
     }
 }

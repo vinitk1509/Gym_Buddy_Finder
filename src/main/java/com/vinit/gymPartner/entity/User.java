@@ -1,8 +1,9 @@
 package com.vinit.gymPartner.entity;
 
+import com.vinit.gymPartner.entity.converter.GenderConverter;
+import com.vinit.gymPartner.entity.enums.Gender;
 import com.vinit.gymPartner.entity.enums.UserRole;
 import com.vinit.gymPartner.entity.enums.UserStatus;
-import com.vinit.gymPartner.entity.enums.Gender;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -31,6 +32,18 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    private Integer age;
+
+    private LocalDate dateOfBirth;
+
+    @Convert(converter = GenderConverter.class)
+    private Gender gender;
+
+    private String profilePictureUrl;
+
+    @Column(length = 500)
+    private String bio;
+
     @Enumerated(EnumType.STRING)
     private UserRole role;
 
@@ -38,37 +51,23 @@ public class User {
     private UserStatus status;
 
     @Column(nullable = false)
-    private Integer reliabilityScore;
-
-    // FIXED: Added 'age' and 'gender' fields to resolve "cannot find symbol" compilation errors
-    // DashboardService and MatchingService were relying on getAge() and getGender() which didn't exist.
-    private Integer age;
-
-    // Date of birth — used to auto-calculate age
-    @Column(name = "date_of_birth", nullable = false)
-    private LocalDate dateOfBirth;
-    
-    private Gender gender;
-
-    @Column(length = 500)
-    private String profilePictureUrl;
-
-    @Column(length = 300)
-    private String bio;
-
-    @Column(length = 15)
-    private String phoneNumber;
+    @Builder.Default
+    private Integer reliabilityScore = 100;
 
     @Column(nullable = false)
-    private Boolean allowMultiplePartners;
+    @Builder.Default
+    private Boolean allowMultiplePartners = false;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer targetGroupSize = 1;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "gym_id", nullable = false)
     private Gym gym;
 
-    // FIXED: Added @Builder.Default so Lombok respects the default value 'true' during object building
-    @Builder.Default
     @Column(nullable = false)
+    @Builder.Default
     private boolean lookingForPartner = true;
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
@@ -77,5 +76,19 @@ public class User {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+
+    private LocalDateTime lastLoginAt;
+
+    private LocalDateTime lastSeenAt;
+
+    private LocalDateTime deletionRequestedAt;
+
+    @PrePersist
+    @PreUpdate
+    private void normalizeEmail() {
+        if (email != null) {
+            email = email.trim().toLowerCase();
+        }
+    }
 
 }

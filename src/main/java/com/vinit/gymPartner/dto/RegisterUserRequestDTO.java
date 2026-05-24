@@ -22,7 +22,9 @@ public class RegisterUserRequestDTO {
     @Size(min = 6)
     private String password;
 
-    @NotNull
+    @NotBlank
+    private String emailVerificationCode;
+
     private String gender;
 
     @NotNull
@@ -43,5 +45,10 @@ public class RegisterUserRequestDTO {
     @NotBlank
     private String gymAddress;
 
+    @Size(max = 500)
+    private String bio;
 
+    private Double latitude;
+    private Double longitude;
+    private String placeId;
 }

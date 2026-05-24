@@ -1,5 +1,6 @@
 package com.vinit.gymPartner.service;
 
+import com.vinit.gymPartner.dto.MyReportDTO;
 import com.vinit.gymPartner.dto.ReportRequestDTO;
 import com.vinit.gymPartner.entity.User;
 import com.vinit.gymPartner.entity.UserReport;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -62,6 +64,24 @@ public class ReportService {
         if (openReports >= 3) {
             userService.updateReliability(reportedUser, -15);
         }
+    }
+
+    public List<MyReportDTO> getMyReports(Long reporterId) {
+        User reporter = userRepository.findById(reporterId)
+                .orElseThrow(() -> new RuntimeException("Reporter not found"));
+
+        return reportRepository.findByReporterOrderByCreatedAtDesc(reporter)
+                .stream()
+                .map(report -> MyReportDTO.builder()
+                        .reportId(report.getId())
+                        .reportedUserId(report.getReportedUser().getId())
+                        .reportedUserName(report.getReportedUser().getName())
+                        .reason(report.getReason().name())
+                        .description(report.getDescription())
+                        .status(report.getStatus().name())
+                        .createdAt(report.getCreatedAt())
+                        .build())
+                .toList();
     }
 
 }

@@ -4,7 +4,6 @@ import com.vinit.gymPartner.entity.enums.MatchStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
-import javax.annotation.processing.Generated;
 import java.time.LocalDateTime;
 
 @Entity

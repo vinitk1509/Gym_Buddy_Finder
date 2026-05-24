@@ -8,7 +8,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import com.vinit.gymPartner.dto.CreateSessionRequestDTO;
+import com.vinit.gymPartner.dto.WorkoutSessionResponseDTO;
 import java.time.LocalDateTime;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/sessions")
@@ -17,23 +20,59 @@ public class WorkoutSessionController {
 
     private final WorkoutSessionService workoutSessionService;
 
+    // GET MY SESSIONS
+    @GetMapping("/my")
+    public ResponseEntity<java.util.List<WorkoutSessionResponseDTO>> getMySessions(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ResponseEntity.ok(
+                workoutSessionService.getSessionsByUser(userDetails.getUserId())
+                        .stream()
+                        .map(this::mapToDTO)
+                        .collect(Collectors.toList())
+        );
+    }
+
     // CREATE SESSION
     @PostMapping("/create")
-    public ResponseEntity<WorkoutSession> createSession(
-            @RequestParam Long matchId,
-            @RequestParam LocalDateTime start,
-            @RequestParam LocalDateTime end,
+    public ResponseEntity<WorkoutSessionResponseDTO> createSession(
+            @RequestBody CreateSessionRequestDTO requestDTO,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
 
         WorkoutSession session = workoutSessionService.createSession(
-                matchId,
+                requestDTO.getMatchId(),
                 userDetails.getUserId(),
-                start,
-                end
+                requestDTO.getStart(),
+                requestDTO.getEnd()
         );
 
-        return ResponseEntity.ok(session);
+        return ResponseEntity.ok(mapToDTO(session));
+    }
+
+    private WorkoutSessionResponseDTO mapToDTO(WorkoutSession session) {
+        com.vinit.gymPartner.dto.MatchResponseDTO matchDTO = new com.vinit.gymPartner.dto.MatchResponseDTO();
+        matchDTO.setId(session.getMatch().getId());
+        matchDTO.setRequesterId(session.getMatch().getRequester().getId());
+        matchDTO.setRequesterName(session.getMatch().getRequester().getName());
+        matchDTO.setReceiverId(session.getMatch().getReceiver().getId());
+        matchDTO.setReceiverName(session.getMatch().getReceiver().getName());
+
+        return WorkoutSessionResponseDTO.builder()
+                .id(session.getId())
+                .match(matchDTO)
+                .startDateTime(session.getStartDateTime())
+                .endDateTime(session.getEndDateTime())
+                .state(session.getState().name())
+                .requesterConfirmed(session.getRequesterConfirmed())
+                .receiverConfirmed(session.getReceiverConfirmed())
+                .createdById(session.getCreatedBy() != null ? session.getCreatedBy().getId() : null)
+                .createdByName(session.getCreatedBy() != null ? session.getCreatedBy().getName() : null)
+                .requesterId(session.getMatch().getRequester().getId())
+                .requesterName(session.getMatch().getRequester().getName())
+                .receiverId(session.getMatch().getReceiver().getId())
+                .receiverName(session.getMatch().getReceiver().getName())
+                .build();
     }
 
     // CONFIRM ATTENDANCE
@@ -66,9 +105,27 @@ public class WorkoutSessionController {
             @PathVariable Long sessionId,
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
-
         workoutSessionService.cancelSession(sessionId, userDetails.getUserId());
-
         return ResponseEntity.ok("Session cancelled");
+    }
+
+    // APPROVE SESSION (partner accepts the request)
+    @PostMapping("/{sessionId}/approve")
+    public ResponseEntity<String> approveSession(
+            @PathVariable Long sessionId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        workoutSessionService.approveSession(sessionId, userDetails.getUserId());
+        return ResponseEntity.ok("Session approved");
+    }
+
+    // DECLINE SESSION (partner declines the request)
+    @PostMapping("/{sessionId}/decline")
+    public ResponseEntity<String> declineSession(
+            @PathVariable Long sessionId,
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        workoutSessionService.declineSession(sessionId, userDetails.getUserId());
+        return ResponseEntity.ok("Session declined");
     }
 }

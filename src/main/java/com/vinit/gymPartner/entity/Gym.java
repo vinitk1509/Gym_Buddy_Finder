@@ -37,6 +37,9 @@ public class Gym {
     @Column(nullable = false)
     private String timezone;
 
+    @Column(unique = true)
+    private String placeId;
+
     private LocalDateTime createdAt;
 
 }

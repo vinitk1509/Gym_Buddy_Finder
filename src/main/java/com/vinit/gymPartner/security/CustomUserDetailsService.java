@@ -22,7 +22,8 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email)
             throws UsernameNotFoundException {
 
-        User user = userRepository.findByEmailAndStatus(email, UserStatus.ACTIVE)
+        String normalizedEmail = email == null ? "" : email.trim().toLowerCase();
+        User user = userRepository.findByEmailIgnoreCaseAndStatus(normalizedEmail, UserStatus.ACTIVE)
                 .orElseThrow(()->
                         new UsernameNotFoundException("User Not Found oe inactive"));
         return new CustomUserDetails(user);

@@ -3,6 +3,7 @@ package com.vinit.gymPartner.service;
 import com.vinit.gymPartner.dto.NearbyUserDTO;
 import com.vinit.gymPartner.entity.Gym;
 import com.vinit.gymPartner.entity.User;
+import com.vinit.gymPartner.entity.enums.UserRole;
 import com.vinit.gymPartner.entity.enums.UserStatus;
 import com.vinit.gymPartner.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,8 @@ public class LocationService {
         for (User candidate : allActiveUsers) {
             // Skip self
             if (candidate.getId().equals(currentUser.getId())) continue;
+            if (candidate.getRole() == UserRole.ADMIN) continue;
+            if (!candidate.isLookingForPartner()) continue;
 
             Gym candidateGym = candidate.getGym();
             if (candidateGym == null) continue;

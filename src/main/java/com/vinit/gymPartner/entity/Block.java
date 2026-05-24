@@ -27,9 +27,4 @@ public class Block {
     private User blocked;
 
     private LocalDateTime createdAt;
-
-    public void setBlocker(User blocker) {
-        throw new UnsupportedOperationException("Not supported yet.");
-    }
-
 }
