@@ -2,18 +2,18 @@ package com.vinit.gymPartner.service;
 
 import com.vinit.gymPartner.entity.EmailVerificationCode;
 import com.vinit.gymPartner.repository.EmailVerificationCodeRepository;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.MailException;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
-import java.io.UnsupportedEncodingException;
+import java.util.List;
+import java.util.Map;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 
@@ -23,7 +23,7 @@ import java.time.LocalDateTime;
 public class EmailService {
 
     private final EmailVerificationCodeRepository codeRepository;
-    private final JavaMailSender mailSender;
+    private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${app.mail.from}")
     private String fromEmail;
@@ -31,11 +31,8 @@ public class EmailService {
     @Value("${app.mail.from-name}")
     private String fromName;
 
-    @Value("${spring.mail.username}")
-    private String mailUsername;
-
-    @Value("${spring.mail.password}")
-    private String mailPassword;
+    @Value("${brevo.api.key:}")
+    private String brevoApiKey;
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final int CHAT_PREVIEW_LIMIT = 140;
@@ -155,20 +152,13 @@ public class EmailService {
     }
 
     private void sendVerificationEmail(String email, String code, int expiryMinutes) {
-        validateMailConfig();
+        if (!validateMailConfig()) return;
 
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
-            helper.setFrom(fromEmail.trim(), fromName.trim());
-            helper.setTo(email);
-            helper.setSubject("Verify your GymPartner email");
-            helper.setText(buildVerificationEmail(code, expiryMinutes), true);
-            mailSender.send(message);
-        } catch (MessagingException | UnsupportedEncodingException | MailException ex) {
-            log.error("Failed to send verification email to {}", email, ex);
-            throw new RuntimeException("Could not send verification email: " + getRootMessage(ex));
-        }
+        sendBrevoEmail(
+                email,
+                "Verify your GymPartner email",
+                buildVerificationEmail(code, expiryMinutes)
+        );
     }
 
     private void sendEventEmail(String receiverEmail, String receiverName, String subject, String bodyHtml) {
@@ -177,34 +167,42 @@ public class EmailService {
             return;
         }
 
+        if (!validateMailConfig()) return;
+
+        sendBrevoEmail(
+                receiverEmail,
+                subject,
+                buildEventEmail(receiverName, bodyHtml)
+        );
+    }
+
+    private void sendBrevoEmail(String toEmail, String subject, String htmlContent) {
         try {
-            validateMailConfig();
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
-            helper.setFrom(fromEmail.trim(), fromName.trim());
-            helper.setTo(receiverEmail);
-            helper.setSubject(subject);
-            helper.setText(buildEventEmail(receiverName, bodyHtml), true);
-            mailSender.send(message);
-        } catch (MessagingException | UnsupportedEncodingException | RuntimeException ex) {
-            log.warn("Failed to send event email '{}' to {}: {}", subject, receiverEmail, getRootMessage(ex));
-        }
-    }
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("api-key", brevoApiKey);
 
-    private void validateMailConfig() {
-        if (isBlank(mailUsername) || isBlank(mailPassword) || isBlank(fromEmail)) {
-            throw new RuntimeException(
-                    "SMTP is not configured. Set SMTP_PASSWORD in your backend run environment and restart the server."
+            Map<String, Object> body = Map.of(
+                    "sender", Map.of("name", fromName.trim(), "email", fromEmail.trim()),
+                    "to", List.of(Map.of("email", toEmail)),
+                    "subject", subject,
+                    "htmlContent", htmlContent
             );
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+            restTemplate.postForObject("https://api.brevo.com/v3/smtp/email", request, String.class);
+            log.info("Sent email to {} via Brevo", toEmail);
+        } catch (Exception ex) {
+            log.error("Failed to send Brevo email to {}: {}", toEmail, ex.getMessage());
         }
     }
 
-    private String getRootMessage(Throwable throwable) {
-        Throwable root = throwable;
-        while (root.getCause() != null) {
-            root = root.getCause();
+    private boolean validateMailConfig() {
+        if (isBlank(brevoApiKey) || isBlank(fromEmail)) {
+            log.warn("BREVO_API_KEY is not configured. Real emails will not be sent.");
+            return false;
         }
-        return root.getMessage() != null ? root.getMessage() : throwable.getMessage();
+        return true;
     }
 
     private boolean isBlank(String value) {
