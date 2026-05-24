@@ -2,6 +2,10 @@ package com.vinit.gymPartner.service;
 
 import com.vinit.gymPartner.entity.EmailVerificationCode;
 import com.vinit.gymPartner.repository.EmailVerificationCodeRepository;
+import jakarta.mail.Message;
+import jakarta.mail.Session;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,10 +14,15 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.ByteArrayOutputStream;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 
@@ -31,8 +40,14 @@ public class EmailService {
     @Value("${app.mail.from-name}")
     private String fromName;
 
-    @Value("${brevo.api.key:}")
-    private String brevoApiKey;
+    @Value("${google.client.id:}")
+    private String googleClientId;
+
+    @Value("${google.client.secret:}")
+    private String googleClientSecret;
+
+    @Value("${google.refresh.token:}")
+    private String googleRefreshToken;
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final int CHAT_PREVIEW_LIMIT = 140;
@@ -154,7 +169,7 @@ public class EmailService {
     private void sendVerificationEmail(String email, String code, int expiryMinutes) {
         if (!validateMailConfig()) return;
 
-        sendBrevoEmail(
+        sendGmailApiEmail(
                 email,
                 "Verify your GymPartner email",
                 buildVerificationEmail(code, expiryMinutes)
@@ -169,37 +184,75 @@ public class EmailService {
 
         if (!validateMailConfig()) return;
 
-        sendBrevoEmail(
+        sendGmailApiEmail(
                 receiverEmail,
                 subject,
                 buildEventEmail(receiverName, bodyHtml)
         );
     }
 
-    private void sendBrevoEmail(String toEmail, String subject, String htmlContent) {
+    private void sendGmailApiEmail(String toEmail, String subject, String htmlContent) {
         try {
+            String accessToken = getAccessToken();
+            if (accessToken == null) {
+                log.error("Failed to get Google Access Token. Cannot send email.");
+                return;
+            }
+
+            Properties props = new Properties();
+            Session session = Session.getDefaultInstance(props, null);
+
+            MimeMessage email = new MimeMessage(session);
+            email.setFrom(new InternetAddress(fromEmail, fromName));
+            email.addRecipient(Message.RecipientType.TO, new InternetAddress(toEmail));
+            email.setSubject(subject);
+            email.setContent(htmlContent, "text/html; charset=utf-8");
+
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            email.writeTo(buffer);
+            byte[] bytes = buffer.toByteArray();
+            String encodedEmail = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("api-key", brevoApiKey);
+            headers.setBearerAuth(accessToken);
 
-            Map<String, Object> body = Map.of(
-                    "sender", Map.of("name", fromName.trim(), "email", fromEmail.trim()),
-                    "to", List.of(Map.of("email", toEmail)),
-                    "subject", subject,
-                    "htmlContent", htmlContent
-            );
-
+            Map<String, Object> body = Map.of("raw", encodedEmail);
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-            restTemplate.postForObject("https://api.brevo.com/v3/smtp/email", request, String.class);
-            log.info("Sent email to {} via Brevo", toEmail);
+
+            restTemplate.postForObject("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", request, String.class);
+            log.info("Sent email to {} via Gmail API", toEmail);
         } catch (Exception ex) {
-            log.error("Failed to send Brevo email to {}: {}", toEmail, ex.getMessage());
+            log.error("Failed to send Gmail API email to {}: {}", toEmail, ex.getMessage());
         }
     }
 
+    private String getAccessToken() {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+            MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+            map.add("client_id", googleClientId);
+            map.add("client_secret", googleClientSecret);
+            map.add("refresh_token", googleRefreshToken);
+            map.add("grant_type", "refresh_token");
+
+            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(map, headers);
+            Map<String, Object> response = restTemplate.postForObject("https://oauth2.googleapis.com/token", request, Map.class);
+            
+            if (response != null && response.containsKey("access_token")) {
+                return (String) response.get("access_token");
+            }
+        } catch (Exception ex) {
+            log.error("Error refreshing Google OAuth token: {}", ex.getMessage());
+        }
+        return null;
+    }
+
     private boolean validateMailConfig() {
-        if (isBlank(brevoApiKey) || isBlank(fromEmail)) {
-            log.warn("BREVO_API_KEY is not configured. Real emails will not be sent.");
+        if (isBlank(googleClientId) || isBlank(googleClientSecret) || isBlank(googleRefreshToken)) {
+            log.warn("Google OAuth credentials are not configured. Real emails will not be sent.");
             return false;
         }
         return true;
