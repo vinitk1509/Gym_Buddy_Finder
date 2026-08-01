@@ -1,4 +1,4 @@
-# 🏋️‍♂️ GymPartner
+# GymPartner (Gym Buddy Finder)
 
 **Find your perfect workout partner, schedule sessions, and crush your fitness goals together.**
 
@@ -37,8 +37,19 @@ graph TD
 ```
 
 ---
+Find your perfect workout partner and crush your fitness goals together.
 
-## ✨ Key Features
+---
+
+IMPORTANT: this repository contains the Spring Boot backend for the GymPartner project. The README previously referenced a React frontend at `frontend_gym/pair-your-pump` and a live demo; at the time of this update the frontend sources are not present in this repository. If the frontend is maintained in a separate repository or deployed elsewhere, please add a link or include it as a subdirectory/submodule.
+
+## Live Application
+
+A live demo is linked historically in this README — if you maintain a hosted frontend, add the live URL here. If the live demo is in a different repo, link that repo instead.
+
+## Overview
+
+GymPartner is a matchmaking backend that helps fitness enthusiasts find and connect with compatible gym partners. The backend provides REST endpoints for users, matchmaking, gyms, chat, file uploads, reporting and admin operations.
 
 ### 🤝 Smart Matchmaking System
 * **Dynamic Matching Workflow:** Complete lifecycle management for matching requests (`PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`, `TERMINATED`, `EXPIRED`).
@@ -66,7 +77,12 @@ graph TD
 
 ---
 
-## 🛠️ Technology Stack
+- Language: Java 21
+- Framework: Spring Boot
+- Persistence: Spring Data JPA (Hibernate)
+- Security: Spring Security (JWT via jjwt)
+- Database: MySQL (development can use H2)
+- Notable libs: Lombok, Cloudinary SDK (for image uploads)
 
 ### Backend
 * **Java 21** & **Spring Boot 3.x**
@@ -168,7 +184,7 @@ docker run -p 8080:8080 \
 
 ---
 
-## 🤝 Contributing
+Document and provide example values for the following external integrations (if used by your code):
 
 1. Fork the project.
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`).
@@ -176,6 +192,6 @@ docker run -p 8080:8080 \
 4. Push to the Branch (`git push origin feature/AmazingFeature`).
 5. Open a Pull Request.
 
-## 📄 License
+## Tests / CI
 
 Distributed under the MIT License. See `LICENSE` for more information.
