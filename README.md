@@ -109,16 +109,16 @@ Provide these environment variables in your local `.env` or cloud provider (Rend
 
 | Variable Name | Description | Example / Default |
 |---|---|---|
-| `PORT` | The port your Spring Boot app binds to | `8080` (automatically set by Render) |
-| `DB_URL` | TiDB / MySQL JDBC connection string | `jdbc:mysql://host:4000/db?sslMode=VERIFY_IDENTITY` |
-| `DB_USERNAME` | Database username | `3PRAJah8MAWdn6B.root` |
-| `DB_PASSWORD` | Database password | `fMIkDK8PNaiu8fB5` |
-| `JWT_SECRET` | Secure signing key for JWT auth tokens | *Generated secure string* |
-| `CLOUDINARY_URL` | Cloudinary integration string | `cloudinary://<api_key>:<secret>@<cloud_name>` |
-| `GOOGLE_CLIENT_ID` | Google Console OAuth Client ID | `9046625...apps.googleusercontent.com` |
-| `GOOGLE_CLIENT_SECRET`| Google Console OAuth Client Secret | `GOCSPX-xxxxx...` |
-| `GOOGLE_REFRESH_TOKEN`| OAuth Playground generated Refresh Token | `1//04xxxxx...` |
-| `CORS_ALLOWED_ORIGINS`| List of authorized CORS origins | `https://gym-partner-five.vercel.app,http://localhost:5173` |
+| `PORT` | The port your Spring Boot app binds to | `8080` |
+| `DB_URL` | TiDB / MySQL JDBC connection string | `jdbc:mysql://<host>:4000/<database>?sslMode=VERIFY_IDENTITY` |
+| `DB_USERNAME` | Database username | `<your-db-username>` |
+| `DB_PASSWORD` | Database password | `<your-db-password>` |
+| `JWT_SECRET` | Secure signing key for JWT auth tokens | `<your-jwt-secret>` |
+| `CLOUDINARY_URL` | Cloudinary integration string | `cloudinary://<api_key>:<api_secret>@<cloud_name>` |
+| `GOOGLE_CLIENT_ID` | Google Console OAuth Client ID | `<your-google-client-id>` |
+| `GOOGLE_CLIENT_SECRET` | Google Console OAuth Client Secret | `<your-google-client-secret>` |
+| `GOOGLE_REFRESH_TOKEN` | OAuth Playground generated refresh token | `<your-google-refresh-token>` |
+| `CORS_ALLOWED_ORIGINS` | List of authorized CORS origins | `https://<your-frontend-domain>,http://localhost:5173` |
 
 ### Frontend Configuration
 
